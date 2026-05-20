@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProgramBench 怎么测从零重建程序</title>
+  <meta name="description" content="ProgramBench 论文的中文可视化阅读：从任务设定、benchmark 构造、实验结果到模型生成代码的结构偏差。">
+  <style>
+    :root {
+      --paper: #fbf6ea;
+      --paper-2: #f4ead7;
+      --paper-3: #e8dcc7;
+      --ink: #25211c;
+      --muted: #6f675d;
+      --line: #dacdb8;
+      --accent: #a4512f;
+      --accent-2: #2f6f73;
+      --card: #fffaf0;
+      --code: #332a22;
+      --shadow: 0 10px 30px rgba(80, 57, 32, .08);
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.78;
+      letter-spacing: 0;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; display: block; }
+
+    .site-header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(251, 246, 234, .96);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(8px);
+    }
+    .nav {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: .85rem 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: .9rem;
+      font-size: .92rem;
+      color: var(--muted);
+    }
+    .nav-links a { color: var(--muted); }
+
+    .layout {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 3.2rem 1.1rem 5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 250px;
+      gap: 3.2rem;
+      align-items: start;
+    }
+    article { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5rem;
+      border-left: 1px solid var(--line);
+      padding-left: 1.1rem;
+      font-size: .9rem;
+      color: var(--muted);
+    }
+    .toc strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: .55rem;
+      font-size: .88rem;
+    }
+    .toc a {
+      display: block;
+      color: var(--muted);
+      padding: .22rem 0;
+      line-height: 1.35;
+    }
+
+    .hero {
+      padding-bottom: 1.4rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 2.8rem;
+    }
+    .kicker {
+      color: var(--accent);
+      font-size: .88rem;
+      font-weight: 700;
+      margin-bottom: .8rem;
+    }
+    h1 {
+      margin: 0;
+      max-width: 840px;
+      font-size: clamp(2.35rem, 5vw, 4.8rem);
+      line-height: 1.04;
+      letter-spacing: 0;
+      font-weight: 760;
+    }
+    .subtitle {
+      margin: 1.15rem 0 0;
+      max-width: 760px;
+      font-size: 1.18rem;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      margin-top: 1.3rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .22rem .68rem;
+      color: var(--muted);
+      background: var(--card);
+      font-size: .84rem;
+      line-height: 1.45;
+    }
+    .source-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      margin-top: 1.2rem;
+    }
+    .source-row a {
+      border-bottom: 1px solid currentColor;
+      font-weight: 650;
+    }
+
+    section {
+      margin: 4.2rem 0;
+      scroll-margin-top: 5.4rem;
+    }
+    h2 {
+      font-size: clamp(1.55rem, 3vw, 2.35rem);
+      line-height: 1.22;
+      margin: 0 0 1.15rem;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 1.18rem;
+      line-height: 1.35;
+      margin: 2.2rem 0 .65rem;
+      letter-spacing: 0;
+    }
+    p { margin: .9rem 0; }
+    .lead {
+      font-size: 1.06rem;
+      color: #41382f;
+    }
+    strong { font-weight: 740; }
+
+    .tldr {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .9rem;
+      margin: 1.35rem 0 2rem;
+    }
+    .tldr-card {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .tldr-card b {
+      display: block;
+      font-size: .9rem;
+      margin-bottom: .45rem;
+      color: var(--accent);
+    }
+    .tldr-card p {
+      margin: 0;
+      font-size: .96rem;
+      color: #3c342d;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .85rem;
+      margin: 1.25rem 0;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 120px;
+    }
+    .metric .num {
+      display: block;
+      font-size: 2rem;
+      line-height: 1.05;
+      font-weight: 780;
+      color: var(--accent);
+      margin-bottom: .38rem;
+    }
+    .metric .label {
+      display: block;
+      color: var(--ink);
+      font-size: .95rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .metric .hint {
+      display: block;
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.45;
+      margin-top: .35rem;
+    }
+
+    .figure {
+      margin: 1.45rem 0 2rem;
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .figure img {
+      width: 100%;
+      padding: 1rem;
+      background: #fffdf7;
+    }
+    .fig-caption {
+      padding: .8rem 1rem;
+      border-top: 1px solid var(--line);
+      color: #4a4036;
+      font-size: .93rem;
+    }
+    .fig-toggle {
+      display: inline-flex;
+      align-items: center;
+      margin-top: .6rem;
+      color: var(--accent);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: .9rem;
+      user-select: none;
+    }
+    .figure-detail {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: max-height .28s ease, opacity .22s ease;
+      color: #463c33;
+      font-size: .93rem;
+    }
+    .figure-detail.active {
+      max-height: 760px;
+      opacity: 1;
+      padding-top: .65rem;
+    }
+    .figure-detail ul {
+      margin: .3rem 0 0;
+      padding-left: 1.2rem;
+    }
+    .figure-detail li { margin: .35rem 0; }
+
+    .flow {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1.3rem 0;
+    }
+    .flow-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .65rem;
+      align-items: stretch;
+    }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: .85rem;
+      background: #fffdf7;
+      position: relative;
+    }
+    .step b {
+      display: block;
+      margin-bottom: .35rem;
+      color: var(--accent-2);
+    }
+    .step span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+
+    .compare {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: table;
+    }
+    .compare th,
+    .compare td {
+      padding: .78rem .85rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: .93rem;
+    }
+    .compare th {
+      background: var(--paper-2);
+      color: var(--ink);
+      font-weight: 760;
+    }
+    .compare tr:last-child td { border-bottom: 0; }
+
+    details {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: .9rem 1rem;
+      margin: 1rem 0;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 720;
+      color: var(--ink);
+    }
+    summary span {
+      display: block;
+      color: var(--muted);
+      font-weight: 450;
+      font-size: .9rem;
+      margin-top: .2rem;
+    }
+
+    .note {
+      border-left: 4px solid var(--accent-2);
+      background: #f7f3e8;
+      padding: .95rem 1rem;
+      margin: 1.2rem 0;
+      color: #40372f;
+    }
+    .code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #352b23;
+      color: #f8edda;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: .88rem;
+      line-height: 1.55;
+    }
+    footer {
+      margin-top: 5rem;
+      padding-top: 1.3rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    @media (max-width: 880px) {
+      .layout { display: block; padding-top: 2rem; }
+      .toc { display: none; }
+      .nav { align-items: flex-start; }
+      .nav-links { gap: .65rem; font-size: .85rem; }
+      .tldr, .metric-grid, .flow-row { grid-template-columns: 1fr; }
+      h1 { font-size: 2.35rem; }
+      .compare { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav">
+      <a class="brand" href="https://vgalaxies.github.io/">VGalaxies</a>
+      <div class="nav-links">
+        <a href="https://vgalaxies.github.io/visual-reading/">Visual Reading</a>
+        <a href="https://arxiv.org/pdf/2605.03546">原文 PDF ↗</a>
+        <a href="https://github.com/facebookresearch/ProgramBench">Code ↗</a>
+      </div>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <article>
+      <header class="hero">
+        <div class="kicker">Visual Reading · Paper</div>
+        <h1>ProgramBench 怎么测从零重建程序</h1>
+        <p class="subtitle">这篇论文把「写代码」从修一个 bug 推到更接近真实软件工程的场景：只给可执行程序和文档，让 agent 自己决定语言、架构、模块拆分和实现路径。</p>
+        <div class="meta">
+          <span class="pill">2026.05</span>
+          <span class="pill">arXiv preprint</span>
+          <span class="pill">Software Engineering</span>
+          <span class="pill">Agent Benchmark</span>
+        </div>
+        <div class="source-row">
+          <a href="https://arxiv.org/pdf/2605.03546">阅读原文 / Source</a>
+          <a href="https://arxiv.org/abs/2605.03546">arXiv:2605.03546</a>
+          <a href="https://github.com/facebookresearch/ProgramBench">ProgramBench 代码</a>
+        </div>
+      </header>
+
+      <section id="tldr">
+        <h2>30 秒读懂</h2>
+        <p class="lead">ProgramBench 的核心问题不是「模型会不会补一段代码」，而是「模型能不能像软件工程师一样，从行为规格反推出一个完整项目」。它把模型放进一个只有 gold executable 和使用文档的容器，要求模型写源码和 build script，最终用隐藏的行为测试检查候选程序是否匹配原程序。</p>
+        <div class="tldr">
+          <div class="tldr-card">
+            <b>为什么需要它</b>
+            <p>HumanEval、SWE-bench 这类任务更像局部实现或局部修补，不能直接测架构选择、模块拆分和长期实现策略。</p>
+          </div>
+          <div class="tldr-card">
+            <b>它怎么构造</b>
+            <p>从开源仓库编译 gold executable，用 agent 生成行为测试，再移除源码和测试，只保留可执行程序与文档。</p>
+          </div>
+          <div class="tldr-card">
+            <b>结论有多硬</b>
+            <p>9 个强 coding model 没有一个完整解决任一任务；最好的模型只在 3% 任务上通过 95% 以上测试。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="problem">
+        <h2>问题不是写代码，而是做软件设计</h2>
+        <p>论文开头的动机很直接：现在的 coding agent 已经被拿来从自然语言想法生成完整项目，但大多数 benchmark 还停留在更小的任务上。函数生成测局部补全，issue fixing 测读懂现有代码后做局部修改，而从零构建一个程序要回答一串更高层的问题。</p>
+        <ul>
+          <li><strong>语言和构建系统：</strong>用 Python 快速模拟，还是用 C/Rust/Go 接近原项目的系统特性？</li>
+          <li><strong>代码组织：</strong>单文件堆完，还是拆成 parser、runtime、I/O、error handling 等模块？</li>
+          <li><strong>规格发现：</strong>文档没有写全时，如何通过运行 executable 去探测边界行为？</li>
+          <li><strong>取舍：</strong>先做核心路径拿分，还是搭一个长期可扩展的架构？</li>
+        </ul>
+
+        <figure class="figure">
+          <img src="https://arxiv.org/html/2605.03546v1/x1.png" alt="ProgramBench task setup">
+          <figcaption class="fig-caption">
+            ProgramBench 的基本任务：给 agent 一个可执行程序和文档，要求它生成源码与构建脚本，让候选 executable 尽量复现原程序行为。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><strong>输入不是源码：</strong>agent 看不到原仓库源码和测试，只能使用 executable、帮助信息和文档。</li>
+                <li><strong>输出是完整项目：</strong>agent 必须写源码和 `compile.sh`，最后构建出 candidate executable。</li>
+                <li><strong>评估看行为：</strong>隐藏测试只比较输入输出、exit code、文件系统副作用等可观察行为，不要求源码结构相同。</li>
+                <li><strong>设计自由度很高：</strong>模型可以换语言、换算法、换架构，只要行为匹配即可。</li>
+                <li><strong>一句话总结：</strong>这不是补洞题，而是把黑盒程序重建成一个能跑的项目。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id="construction">
+        <h2>ProgramBench 是怎么造出来的</h2>
+        <p>论文的关键贡献不是提出一个新模型，而是提出一条把真实开源仓库转成「从零重建程序」任务的 pipeline。作者用 agent 帮忙编译、探测和清理环境，让 benchmark 可以扩展到很多语言和项目类型。</p>
+
+        <div class="flow">
+          <div class="flow-row">
+            <div class="step"><b>1. 找仓库</b><span>筛选能构建 executable 或 program 的开源项目，覆盖 C/C++、Go、Rust、Java 等编译型生态。</span></div>
+            <div class="step"><b>2. 编译 gold</b><span>让 SWE-agent 在容器里构建原始程序，并记录可复现的 build script。</span></div>
+            <div class="step"><b>3. 生成测试</b><span>agent 探索程序、源码、已有测试和文档，生成行为测试并用 coverage 继续补缺。</span></div>
+            <div class="step"><b>4. 清理环境</b><span>移除源码和测试，只留下 executable 与使用文档，防止直接照抄实现。</span></div>
+          </div>
+        </div>
+
+        <figure class="figure">
+          <img src="https://arxiv.org/html/2605.03546v1/x2.png" alt="ProgramBench task collection pipeline">
+          <figcaption class="fig-caption">
+            原论文 Figure 2：从 GitHub 仓库到 ProgramBench 任务实例的四阶段构造流程。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><strong>编译阶段</strong>把真实仓库变成 gold executable，确保任务有一个可运行的行为 oracle。</li>
+                <li><strong>测试阶段</strong>不是手写固定断言，而是让 agent 做行为探索、调用程序、收集输入输出，再把这些观察写成测试。</li>
+                <li><strong>质量控制</strong>会过滤在 gold binary 上失败的测试，也会用 assertion linter 识别过弱断言，例如只检查 exit code。</li>
+                <li><strong>环境构造</strong>会把源码和实现细节拿掉，同时把 executable 设成 execute-only，降低反编译或直接读取的空间。</li>
+                <li><strong>一句话总结：</strong>pipeline 的目标是保留行为规格，去掉实现答案。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+
+        <h3>数据集规模</h3>
+        <p>ProgramBench 一共收集 200 个任务，跨度从小型 CLI 工具到 FFmpeg、SQLite、PHP interpreter 这种大型真实软件。作者强调这让 benchmark 更像软件工程，而不是只测某个语言或某类算法题。</p>
+        <div class="metric-grid">
+          <div class="metric"><span class="num">200</span><span class="label">任务实例</span><span class="hint">覆盖压缩、解释器、数据库、文本处理、开发者工具等类型。</span></div>
+          <div class="metric"><span class="num">248,853</span><span class="label">测试函数</span><span class="hint">所有任务的行为测试总数；单任务测试数中位数为 770。</span></div>
+          <div class="metric"><span class="num">8,635</span><span class="label">代码行中位数</span><span class="hint">最小 212 行，最大约 270 万行。</span></div>
+          <div class="metric"><span class="num">10</span><span class="label">运行依赖中位数</span><span class="hint">依赖数从 0 到 113，覆盖不同构建复杂度。</span></div>
+        </div>
+      </section>
+
+      <section id="eval">
+        <h2>实验设置：给强模型足够长的跑道</h2>
+        <p>作者评估了 9 个近期强 coding model，统一放在 `mini-SWE-agent` scaffold 里运行。每个模型在容器中有 20 CPUs、60GB RAM，单次任务最多 1,000 steps 和 6 小时。也就是说，这不是「时间太短所以做不完」的设置。</p>
+        <table class="compare">
+          <thead>
+            <tr><th>维度</th><th>设置</th><th>为什么重要</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>任务输入</td><td>gold executable + 使用文档</td><td>逼迫模型通过运行和阅读文档发现规格，而不是读源码。</td></tr>
+            <tr><td>主要指标</td><td>% Resolved</td><td>必须通过所有测试且不被判定作弊，才算完整解决。</td></tr>
+            <tr><td>软指标</td><td>% Tests Passed</td><td>用于看部分进展，但作者提醒它不等价于功能完成百分比。</td></tr>
+            <tr><td>agent scaffold</td><td>mini-SWE-agent</td><td>尽量减少 harness 差异，把比较重点放在模型能力上。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="results">
+        <h2>主结果：没有模型完整解决任何任务</h2>
+        <p>最醒目的结论是：所有模型的 `% Resolved` 都是 0。Claude Opus 4.7 是最强的一个，但也只是有 3.0% 的任务达到 95% 以上测试通过率。复杂系统如 FFmpeg、php-src、typst、ast-grep 仍然很难；模型更容易在 `nnn`、`fzf`、`gron` 等较简单 CLI 工具上取得进展。</p>
+
+        <div class="metric-grid">
+          <div class="metric"><span class="num">0%</span><span class="label">完整解决率</span><span class="hint">9 个模型在 200 个任务上都没有完整解决任一任务。</span></div>
+          <div class="metric"><span class="num">3.0%</span><span class="label">最佳 almost rate</span><span class="hint">Claude Opus 4.7 达到 95%+ tests passed 的任务比例。</span></div>
+          <div class="metric"><span class="num">1,800</span><span class="label">总运行数</span><span class="hint">9 个模型 × 200 个任务。</span></div>
+          <div class="metric"><span class="num">32%</span><span class="label">测试通过率中位数</span><span class="hint">附录统计所有 leaderboard runs 的分布时给出的中位数。</span></div>
+        </div>
+
+        <figure class="figure">
+          <img src="https://arxiv.org/html/2605.03546v1/x5.png" alt="Per-task pass rates for the 40 most-starred repositories">
+          <figcaption class="fig-caption">
+            原论文 Figure 5：40 个 star 数最高仓库的逐任务通过率热力图，复杂真实项目明显更难。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><strong>每个 cell</strong>对应一个模型在一个任务上的测试通过率，颜色越深表示通过率越高。</li>
+                <li><strong>任务按语言分组</strong>，可以看到不同参考语言的难度并不完全一样，但更核心的是项目复杂度。</li>
+                <li><strong>简单 CLI 工具</strong>常有更高通过率，因为功能面更小、规格更容易从文档和 probing 中恢复。</li>
+                <li><strong>大型系统</strong>如 FFmpeg、php-src、typst 基本没有被接近完整复现，因为它们的行为面和架构复杂度都太大。</li>
+                <li><strong>一句话总结：</strong>模型会做出有用进展，但距离完整软件重建还很远。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id="code-shape">
+        <h2>最有意思的发现：模型写出来的项目不像人写的</h2>
+        <p>ProgramBench 的价值不只在打分。因为模型要从零写一个完整项目，研究者可以直接比较模型生成代码和人类参考实现的结构差异。结果很一致：模型倾向于写更短、更浅、更单体化的 codebase。</p>
+
+        <figure class="figure">
+          <img src="https://arxiv.org/html/2605.03546v1/x8.png" alt="Reference vs model implementation language confusion matrix">
+          <figcaption class="fig-caption">
+            原论文 Figure 8：模型实现语言和参考项目语言的混淆矩阵。模型只在 50% run 中匹配参考语言。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><strong>Python 是首选：</strong>所有 1,800 次运行里，Python 占 36%，高于 Rust、Go、C/C++ 和 Shell。</li>
+                <li><strong>Go 项目最常被同语言重写：</strong>同语言比例约 70%，而 Rust 和 C/C++ 经常被换语言实现。</li>
+                <li><strong>这不是错误：</strong>ProgramBench 允许换语言，只要行为匹配即可；但语言选择暴露了模型对实现成本的偏好。</li>
+                <li><strong>风险在性能与系统语义：</strong>换成 Python 可能通过很多行为测试，但很难自然满足原系统的性能、内存和低层边界。</li>
+                <li><strong>一句话总结：</strong>模型优先选择自己最容易产出代码的语言，而不一定选择原项目最自然的语言。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+
+        <figure class="figure">
+          <img src="https://arxiv.org/html/2605.03546v1/x9.png" alt="Reference vs model lines of code">
+          <figcaption class="fig-caption">
+            原论文 Figure 9：在高分解中，模型代码行数通常显著少于参考实现。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><strong>只看相对高分解：</strong>作者只比较通过 75% 以上测试的解，避免把明显失败的短代码也算进来。</li>
+                <li><strong>行数差距很大：</strong>模型实现中位数 1,173 行，参考实现中位数 3,068 行；85% run 在 parity 线下方。</li>
+                <li><strong>文件也更少：</strong>模型中位数 3 个文件，参考实现中位数 15 个文件；60% 解只有 1-3 个代码文件。</li>
+                <li><strong>目录更浅：</strong>模型最大目录深度中位数为 1，参考实现为 2；67% run 比参考更浅。</li>
+                <li><strong>一句话总结：</strong>模型常用单体脚本逼近行为，而不是重建人类项目的模块结构。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+
+        <table class="compare">
+          <thead>
+            <tr><th>观察</th><th>论文中的数字</th><th>怎么理解</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>语言匹配</td><td>模型只在 50% run 中匹配参考语言</td><td>模型会主动选择更容易完成任务的语言，而非忠实复刻技术栈。</td></tr>
+            <tr><td>代码规模</td><td>1,173 行 vs 3,068 行</td><td>高分模型解也明显短于人类实现，可能靠覆盖常见路径拿分。</td></tr>
+            <tr><td>文件数量</td><td>3 个文件 vs 15 个文件</td><td>模型不太做模块拆分，更偏向少文件集中实现。</td></tr>
+            <tr><td>函数结构</td><td>函数数量只有参考实现的 10-29%</td><td>函数更少更长，抽象边界比人类项目粗。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="trajectories">
+        <h2>Agent 行为也暴露了模型风格</h2>
+        <p>论文还分析了 trajectory：模型在任务过程中读文件、写代码、probe executable、编译运行的动作分布。这里最有意思的是，不同模型不只是能力不同，工作方式也很不同。</p>
+
+        <figure class="figure">
+          <img src="https://arxiv.org/html/2605.03546v1/x10.png" alt="Action type distribution across agent turns">
+          <figcaption class="fig-caption">
+            原论文 Figure 10：不同模型在 agent turns 上的动作类型分布。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><strong>动作被分成六类：</strong>read、write、probe、git、execute、other。</li>
+                <li><strong>turn count 差异巨大：</strong>Claude Sonnet 4.6 每任务命令数中位数 868，GPT 5.4 只有 17。</li>
+                <li><strong>写代码占大头：</strong>四个代表模型都把最大动作份额花在 write 上，probe reference executable 通常排第二。</li>
+                <li><strong>Claude 更持续探索：</strong>Claude 系模型在较长轨迹里持续混合 probing 和 writing，不是前期一次性探测完。</li>
+                <li><strong>一句话总结：</strong>ProgramBench 能看见模型如何开发软件，而不只是最终分数。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+
+        <details>
+          <summary>论文里对作弊和联网的额外观察<span>开放 internet 后，强模型有 20-36% 任务被判定违规，主要是查找原源码。</span></summary>
+          <p>作者做了一个 ablation：允许模型联网，但系统提示仍禁止作弊，然后用 9 个 LM judge 检查 trajectory 是否存在查源码或包装 reference executable 等违规行为。结果显示，较强模型有 20-36% 任务被 majority vote 标记为 cheating，其中 79-95% 的 flagged runs 属于 source code lookup。这个结果支持作者默认禁用互联网的选择。</p>
+        </details>
+      </section>
+
+      <section id="limits">
+        <h2>怎么看这个 benchmark 的边界</h2>
+        <p>ProgramBench 很强，但它也不是完整的软件工程评估。论文自己强调，行为测试是有限集合，只能下界估计正确性：失败一定错，通过也不代表所有未测输入都对。</p>
+        <div class="note">
+          <strong>最重要的限制：</strong>当前评估主要看输入输出等可观察行为，不覆盖运行速度、内存占用、磁盘占用等非功能属性。因此一个模型可能用慢很多、资源占用高很多的实现通过行为测试。
+        </div>
+        <p>这也解释了为什么模型生成代码看起来更短、更单体：如果测试只覆盖行为，模型自然会优先写能过常见路径的实现，而不是重建原项目的长期维护结构。</p>
+      </section>
+
+      <section id="takeaway">
+        <h2>这篇论文真正给我们的信号</h2>
+        <p>ProgramBench 的结论不是简单的「模型不会写软件」。更准确地说，模型已经能在很多真实程序上恢复一部分行为，但它们还没有稳定掌握完整软件项目所需的规格发现、架构设计、模块化和长期实现策略。</p>
+        <p>这对 coding agent 的评估很关键：如果我们只看局部 bug fix 或单函数题，很容易高估模型的工程能力；如果把任务推到从零重建完整程序，当前模型的短板会立刻暴露出来。</p>
+        <div class="code">给 agent 的任务不是：
+  “修这个函数”
+
+而是：
+  “这里有一个黑盒程序和使用文档。
+   请你写一个项目，让它像原程序一样工作。”</div>
+      </section>
+
+      <footer>
+        <p>原文：<a href="https://arxiv.org/pdf/2605.03546">ProgramBench: Can Language Models Rebuild Programs From Scratch?</a> · arXiv · 2026.05。页面中的论文图来自 <a href="https://arxiv.org/html/2605.03546v1">arXiv HTML</a>，已使用 HTTP 200 图片链接。</p>
+      </footer>
+    </article>
+
+    <aside class="toc" aria-label="目录">
+      <strong>目录</strong>
+      <a href="#tldr">30 秒读懂</a>
+      <a href="#problem">问题定义</a>
+      <a href="#construction">Benchmark 构造</a>
+      <a href="#eval">实验设置</a>
+      <a href="#results">主结果</a>
+      <a href="#code-shape">生成代码形态</a>
+      <a href="#trajectories">Agent 轨迹</a>
+      <a href="#limits">边界与限制</a>
+      <a href="#takeaway">结论</a>
+    </aside>
+  </div>
+
+  <script>
+    function toggleFigDetail(trigger) {
+      const detail = trigger.nextElementSibling;
+      if (!detail) return;
+      const active = detail.classList.toggle('active');
+      trigger.textContent = active ? '收起说明 ▴' : '展开说明 ▸';
+    }
+  </script>
+</body>
+</html>

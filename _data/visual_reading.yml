@@ -6,4 +6,9 @@
 #   date         - YYYY-MM-DD
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
-entries: []
+entries:
+  - slug: programbench-rebuild-programs-from-scratch
+    title: 'ProgramBench 怎么测从零重建程序'
+    date: 2026-05-20
+    source_type: paper
+    source_url: 'https://arxiv.org/pdf/2605.03546'
