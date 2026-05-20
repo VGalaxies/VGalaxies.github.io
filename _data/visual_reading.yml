@@ -1,0 +1,9 @@
+# Visual Reading 索引
+# 最新的条目放在 entries 列表顶部。
+# 字段：
+#   slug         - URL 目录名（kebab-case 英文）
+#   title        - 列表卡片标题
+#   date         - YYYY-MM-DD
+#   source_type  - paper 或 blog
+#   source_url   - 原文链接（可选）
+entries: []
