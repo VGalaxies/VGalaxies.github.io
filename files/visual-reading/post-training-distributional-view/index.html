@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SFT / RL / OPD 的分布塑形视角</title>
+  <meta name="description" content="把 nrehiew 的 SFT、RL 与 On-Policy Distillation 博客转成中文可视化阅读：目标分布、on-policy 数据、遗忘与泛化。">
+  <style>
+    :root {
+      --bg: #fbf6ea;
+      --panel: #fffaf0;
+      --panel-2: #f4ead7;
+      --line: #dfd0b8;
+      --ink: #241f1a;
+      --muted: #6b6259;
+      --accent: #9f4c2f;
+      --sft: #476b7a;
+      --rl: #5d7b48;
+      --opd: #7a5b89;
+      --warn: #a16033;
+      --shadow: 0 14px 36px rgba(77, 54, 31, .08);
+      --max: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.78;
+      letter-spacing: 0;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    strong, b { font-weight: 740; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: rgba(251, 246, 234, .96);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: .78rem 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-weight: 760;
+      white-space: nowrap;
+    }
+    .topnav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      font-size: .88rem;
+    }
+    .topnav a { color: var(--muted); }
+
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 3.2rem 1.1rem 5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 250px;
+      gap: 3.2rem;
+      align-items: start;
+    }
+    article { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.2rem;
+      padding-left: 1rem;
+      border-left: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    .toc b {
+      display: block;
+      color: var(--ink);
+      margin-bottom: .6rem;
+      font-size: .88rem;
+    }
+    .toc a {
+      display: block;
+      color: var(--muted);
+      padding: .22rem 0;
+      line-height: 1.38;
+    }
+
+    .hero {
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 3.2rem;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: .88rem;
+      font-weight: 760;
+      margin-bottom: .85rem;
+    }
+    h1 {
+      margin: 0;
+      max-width: 880px;
+      font-size: clamp(2.35rem, 5.2vw, 5rem);
+      line-height: 1.03;
+      letter-spacing: 0;
+      font-weight: 790;
+    }
+    .hero-sub {
+      margin: 1.15rem 0 0;
+      max-width: 800px;
+      color: var(--muted);
+      font-size: 1.15rem;
+      line-height: 1.78;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      margin: 1.2rem 0 0;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: .24rem .68rem;
+      font-size: .84rem;
+      line-height: 1.35;
+    }
+    .source-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .8rem;
+      margin-top: 1.2rem;
+      font-weight: 680;
+    }
+    .source-row a { border-bottom: 1px solid currentColor; }
+
+    section {
+      margin: 4.4rem 0;
+      scroll-margin-top: 5.6rem;
+    }
+    h2 {
+      margin: 0 0 1rem;
+      font-size: clamp(1.55rem, 3vw, 2.35rem);
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 2rem 0 .65rem;
+      font-size: 1.18rem;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    p { margin: .9rem 0; }
+    .section-kicker {
+      color: var(--accent);
+      font-weight: 760;
+      font-size: .86rem;
+      margin-bottom: .45rem;
+    }
+    .lead {
+      color: #413831;
+      font-size: 1.05rem;
+    }
+
+    .tldr {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 1rem;
+      margin: 1.35rem 0 0;
+    }
+    .tldr-main, .metrics {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    .tldr-main { padding: 1.15rem 1.2rem; }
+    .tldr-main b {
+      color: var(--accent);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: hidden;
+    }
+    .metric {
+      padding: 1rem;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      min-height: 132px;
+    }
+    .metric:nth-child(2n) { border-right: 0; }
+    .metric:nth-last-child(-n+2) { border-bottom: 0; }
+    .metric .v {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1.1;
+      color: var(--accent);
+      font-weight: 790;
+      margin-bottom: .35rem;
+    }
+    .metric .k {
+      display: block;
+      color: var(--ink);
+      font-weight: 730;
+      font-size: .95rem;
+    }
+    .metric .d {
+      display: block;
+      margin-top: .32rem;
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.45;
+    }
+
+    .viz-card {
+      margin: 1.3rem 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .viz-body { padding: 1rem; background: #fffdf7; }
+    .viz-caption {
+      border-top: 1px solid var(--line);
+      padding: .82rem 1rem;
+      color: #453c34;
+      font-size: .93rem;
+    }
+    svg { max-width: 100%; height: auto; display: block; }
+
+    .method-tabs {
+      display: flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin: 1.2rem 0 .85rem;
+    }
+    .method-tab {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: .5rem .85rem;
+      font: inherit;
+      font-size: .9rem;
+      cursor: pointer;
+    }
+    .method-tab.active {
+      color: var(--ink);
+      border-color: #b99b7a;
+      background: #fff7e6;
+      font-weight: 740;
+    }
+    .method-panel { display: none; }
+    .method-panel.active { display: block; }
+    .method-card {
+      display: grid;
+      grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+      gap: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 1rem;
+    }
+    .method-copy h3 { margin-top: 0; }
+    .attrs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .55rem;
+      margin-top: 1rem;
+    }
+    .attr {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: .65rem;
+      background: #fffdf7;
+      min-height: 86px;
+    }
+    .attr .k {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: .25rem;
+    }
+    .attr .v {
+      color: var(--ink);
+      font-size: .9rem;
+      line-height: 1.45;
+      font-weight: 640;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1.2rem 0;
+    }
+    .plain-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .plain-card h3 { margin-top: 0; }
+    .plain-card p:last-child { margin-bottom: 0; }
+
+    .token-board {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .token-col {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffdf7;
+      padding: .95rem;
+    }
+    .token-col h3 { margin: 0 0 .4rem; }
+    .bar {
+      display: grid;
+      grid-template-columns: 92px 1fr 42px;
+      gap: .5rem;
+      align-items: center;
+      margin: .62rem 0;
+      font-size: .86rem;
+    }
+    .track {
+      height: 9px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      overflow: hidden;
+    }
+    .fill { height: 100%; border-radius: 999px; background: var(--warn); }
+    .low .fill { background: var(--rl); }
+
+    .exp-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      margin: 1.2rem 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+    th, td {
+      padding: .78rem .85rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      font-size: .93rem;
+    }
+    th {
+      background: var(--panel-2);
+      font-weight: 760;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .group td {
+      background: #f7eddc;
+      color: var(--muted);
+      font-weight: 760;
+      font-size: .86rem;
+    }
+    .good { color: var(--rl); font-weight: 760; }
+    .bad { color: var(--warn); font-weight: 760; }
+    .finding-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .85rem;
+      margin: 1rem 0;
+    }
+    .finding {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 1rem;
+    }
+    .finding .num {
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 780;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .finding h3 { margin: .4rem 0 .45rem; }
+
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .85rem;
+      margin-top: 1.1rem;
+    }
+    .why-card {
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--accent);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 1rem;
+      min-height: 260px;
+    }
+    .why-card:nth-child(1) { border-top-color: var(--sft); }
+    .why-card:nth-child(2) { border-top-color: var(--warn); }
+    .why-card:nth-child(3) { border-top-color: var(--rl); }
+    .verdict {
+      margin-top: .8rem;
+      padding-top: .65rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 680;
+    }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .7rem;
+      margin: 1.2rem 0;
+    }
+    .stage {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: .95rem;
+      min-height: 170px;
+      position: relative;
+    }
+    .stage b {
+      display: block;
+      color: var(--accent);
+      margin-bottom: .35rem;
+    }
+    .stage span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+
+    .triad {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .85rem;
+      margin: 1rem 0;
+    }
+    .triad-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .triad-card h3 { margin-top: 0; }
+
+    .note {
+      border-left: 4px solid var(--accent);
+      background: #f7efdf;
+      padding: .95rem 1rem;
+      color: #3f362e;
+      margin: 1.2rem 0;
+    }
+    .source-box {
+      margin-top: 4rem;
+      border-top: 1px solid var(--line);
+      padding-top: 1.2rem;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    @media (max-width: 920px) {
+      .page { display: block; padding-top: 2rem; }
+      .toc { display: none; }
+      .tldr, .method-card, .two-col, .token-board, .finding-grid, .why-grid, .pipeline, .triad { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr; }
+      .metric { border-right: 0; }
+      .metric:nth-last-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .metric:last-child { border-bottom: 0; }
+      h1 { font-size: 2.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="https://vgalaxies.github.io/">VGalaxies</a>
+      <nav class="topnav">
+        <a href="#methods">三种方法</a>
+        <a href="#experiment">关键实验</a>
+        <a href="#why">为什么少遗忘</a>
+        <a href="#future">下一步</a>
+        <a href="https://nrehiew.github.io/blog/sft_rl_opd/">原文 ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="page">
+    <article>
+      <header class="hero">
+        <div class="eyebrow">Visual Reading · Post-training</div>
+        <h1>SFT / RL / OPD 的差别，本质是怎么塑形同一个分布</h1>
+        <p class="hero-sub">nrehiew 这篇 blog 给了一个很有用的统一视角：别先纠结算法名，先问训练到底把模型分布推向哪里，以及梯度只能从哪些状态出发。顺着这个问题看，SFT、RL 和 On-Policy Distillation 的遗忘、泛化、学生反超老师都会变得更顺。</p>
+        <div class="meta-row">
+          <span class="pill">Blog visual reading</span>
+          <span class="pill">SFT / RL / OPD</span>
+          <span class="pill">on-policy data</span>
+          <span class="pill">distributional lens</span>
+        </div>
+        <div class="source-row">
+          <a href="https://nrehiew.github.io/blog/sft_rl_opd/">阅读原文 / Source</a>
+          <a href="https://syt-nju.github.io/files/visual-reading/post-training-distributional-view/">参考 visual reading</a>
+        </div>
+      </header>
+
+      <section id="tldr">
+        <div class="section-kicker">00 · 先抓主线</div>
+        <h2>这篇文章真正想说：on-policy 数据才是承重结构</h2>
+        <div class="tldr">
+          <div class="tldr-main">
+            <p><b>一句话：</b>SFT 把模型拉向外部数据集；RL 让模型从自己当前策略里采样，再把概率质量挪向高奖励轨迹；OPD 也从学生自己采样，但用教师 logits 给更密集的 token 级信号。</p>
+            <p>因此，SFT 更容易把模型推到一个离原分布很远的位置，带来遗忘；RL 和 OPD 的数据来自当前模型自己，它们只在模型已经访问过的区域附近更新，自然带着一种隐式 KL 约束。文章最后的判断是：未来更好的 post-training 算法大概率也必须保留 on-policy 这个性质。</p>
+          </div>
+          <div class="metrics">
+            <div class="metric"><span class="v">0.450 → 0.059</span><span class="k">SFT 教师到 OPD-SFT 学生</span><span class="d">Norm. Levenshtein 从大幅重写回到最小编辑。</span></div>
+            <div class="metric"><span class="v">0.286 → 0.297</span><span class="k">通用代码能力没继承退化</span><span class="d">OPD 学生的 LiveCodeBench 反而高于 SFT 教师。</span></div>
+            <div class="metric"><span class="v">0.800</span><span class="k">OPD-SFT Pass@1</span><span class="d">甚至略高于 RL 教师的 0.792。</span></div>
+            <div class="metric"><span class="v">3 个条件</span><span class="k">下一代算法</span><span class="d">密集信号、低偏奖励方向、on-policy 状态分布。</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="mental">
+        <div class="section-kicker">01 · 心智模型</div>
+        <h2>把语言模型想成一张概率地形图</h2>
+        <p class="lead">模型不是一个点，而是序列空间上的分布。一个山头可能对应数学推理，另一个山头对应代码修补，还有一个山头对应写作风格。Post-training 做的事，就是把这些山头压低、抬高、平移或者合并。</p>
+        <p>这个视角下，最关键的问题变成：<strong>目标分布由谁定义？训练数据从哪里来？梯度是否必须尊重当前模型已经会到达的状态？</strong></p>
+
+        <figure class="viz-card">
+          <div class="viz-body">
+            <svg viewBox="0 0 900 320" role="img" aria-label="A distribution landscape showing SFT, RL, and OPD update directions">
+              <defs>
+                <marker id="arrowA" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9f4c2f"/></marker>
+                <marker id="arrowB" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5d7b48"/></marker>
+                <marker id="arrowC" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7a5b89"/></marker>
+              </defs>
+              <rect x="0" y="0" width="900" height="320" rx="18" fill="#fffdf7"/>
+              <path d="M55 245 C110 230,120 145,180 145 C240 145,250 225,300 232 C370 245,390 85,455 78 C535 68,550 215,610 228 C680 242,690 160,748 152 C810 143,815 224,850 236" fill="none" stroke="#473d35" stroke-width="4"/>
+              <path d="M55 245 C110 230,120 145,180 145 C240 145,250 225,300 232 C370 245,390 85,455 78 C535 68,550 215,610 228 C680 242,690 160,748 152 C810 143,815 224,850 236 L850 270 L55 270 Z" fill="#e8dcc7" opacity=".62"/>
+              <line x1="205" y1="132" x2="205" y2="80" stroke="#9f4c2f" stroke-width="3" marker-end="url(#arrowA)"/>
+              <line x1="455" y1="72" x2="488" y2="52" stroke="#5d7b48" stroke-width="3" marker-end="url(#arrowB)"/>
+              <line x1="742" y1="145" x2="772" y2="116" stroke="#7a5b89" stroke-width="3" marker-end="url(#arrowC)"/>
+              <circle cx="455" cy="78" r="7" fill="#5d7b48"/>
+              <circle cx="742" cy="152" r="7" fill="#7a5b89"/>
+              <circle cx="205" cy="145" r="7" fill="#9f4c2f"/>
+              <path d="M150 100 C190 70,225 68,260 92" fill="none" stroke="#9f4c2f" stroke-width="2" stroke-dasharray="6 6"/>
+              <path d="M420 58 C470 28,515 42,545 86" fill="none" stroke="#5d7b48" stroke-width="2" stroke-dasharray="6 6"/>
+              <path d="M700 130 C745 96,795 100,825 132" fill="none" stroke="#7a5b89" stroke-width="2" stroke-dasharray="6 6"/>
+              <text x="150" y="297" font-size="16" fill="#6b6259">外部目标：SFT 直接拉</text>
+              <text x="392" y="297" font-size="16" fill="#6b6259">奖励局部：RL 抬高高回报区域</text>
+              <text x="665" y="297" font-size="16" fill="#6b6259">教师形状：OPD 在学生状态上对齐</text>
+            </svg>
+          </div>
+          <figcaption class="viz-caption"><b>读图：</b>灰色曲线是当前模型分布。SFT 的目标可以在外部任意位置；RL 和 OPD 都先从当前分布采样，因此更新通常发生在模型已经到达的区域。这就是文章后面所有「少遗忘」论证的起点。</figcaption>
+        </figure>
+      </section>
+
+      <section id="methods">
+        <div class="section-kicker">02 · 三种塑形方式</div>
+        <h2>SFT、RL、OPD 的区别不是训练名词，而是力从哪里来</h2>
+        <p>下面这组三栏是文章最值得保留的核心框架。你可以不记公式，但要记住每种方法的 target、data 和 gradient 三件事。</p>
+
+        <div class="method-tabs" role="tablist" aria-label="method tabs">
+          <button class="method-tab active" type="button" data-target="sft">SFT · 外部数据集</button>
+          <button class="method-tab" type="button" data-target="rl">RL · 奖励方向</button>
+          <button class="method-tab" type="button" data-target="opd">OPD · 学生采样</button>
+        </div>
+
+        <div class="method-panel active" id="panel-sft">
+          <div class="method-card">
+            <div class="method-copy">
+              <h3>目标先固定，模型被往外部数据集拉</h3>
+              <p>SFT 用已有标注数据做交叉熵训练。数据可能来自人，也可能来自更强模型，但它在训练前就已经存在。</p>
+              <p>问题是 NLL 不关心模型原来在哪里。只要目标 token 在数据里，它就被当成应该提高概率的 token，不管这个 token 是任务关键步骤，还是某种风格习惯。</p>
+              <div class="attrs">
+                <div class="attr"><span class="k">target</span><span class="v">外部固定数据分布</span></div>
+                <div class="attr"><span class="k">data</span><span class="v">外部 trajectory</span></div>
+                <div class="attr"><span class="k">gradient</span><span class="v">token 级密集压力</span></div>
+                <div class="attr"><span class="k">风险</span><span class="v">把无关能力一起推走</span></div>
+              </div>
+            </div>
+            <div class="viz-body">
+              <svg viewBox="0 0 430 300" role="img" aria-label="SFT updates">
+                <defs><marker id="sftArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#476b7a"/></marker></defs>
+                <rect width="430" height="300" rx="16" fill="#fffdf7"/>
+                <path d="M38 235 C80 225,82 150,128 150 C178 150,178 220,225 228 C275 236,280 115,328 110 C372 106,378 216,402 230" fill="none" stroke="#40372f" stroke-width="4"/>
+                <path d="M70 92 C145 42,250 35,345 78" fill="none" stroke="#476b7a" stroke-width="2" stroke-dasharray="7 7"/>
+                <line x1="82" y1="219" x2="112" y2="128" stroke="#476b7a" stroke-width="3" marker-end="url(#sftArrow)"/>
+                <line x1="150" y1="154" x2="178" y2="92" stroke="#476b7a" stroke-width="3" marker-end="url(#sftArrow)"/>
+                <line x1="230" y1="228" x2="240" y2="80" stroke="#476b7a" stroke-width="3" marker-end="url(#sftArrow)"/>
+                <line x1="330" y1="110" x2="310" y2="70" stroke="#476b7a" stroke-width="3" marker-end="url(#sftArrow)"/>
+                <text x="72" y="270" fill="#6b6259" font-size="14">每个演示 token 都施力</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-panel" id="panel-rl">
+          <div class="method-card">
+            <div class="method-copy">
+              <h3>模型先从自己采样，再朝高奖励区域挪</h3>
+              <p>RL 没有一个提前写死的外部分布。模型先生成自己的样本，reward function 给分，policy gradient 再提高高回报轨迹的概率。</p>
+              <p>这使 RL 的更新有局部性：模型只会在自己能采到的区域被推动。只要奖励方向靠谱，这种局部更新就能提高能力，同时少冲击无关能力。</p>
+              <div class="attrs">
+                <div class="attr"><span class="k">target</span><span class="v">期望奖励更高的方向</span></div>
+                <div class="attr"><span class="k">data</span><span class="v">on-policy 自采样</span></div>
+                <div class="attr"><span class="k">gradient</span><span class="v">集中在被采到的轨迹</span></div>
+                <div class="attr"><span class="k">风险</span><span class="v">reward 偏差或 credit 太稀疏</span></div>
+              </div>
+            </div>
+            <div class="viz-body">
+              <svg viewBox="0 0 430 300" role="img" aria-label="RL updates">
+                <defs><marker id="rlArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#5d7b48"/></marker></defs>
+                <rect width="430" height="300" rx="16" fill="#fffdf7"/>
+                <path d="M38 235 C80 225,82 150,128 150 C178 150,178 220,225 228 C275 236,280 115,328 110 C372 106,378 216,402 230" fill="none" stroke="#40372f" stroke-width="4"/>
+                <circle cx="126" cy="150" r="6" fill="#5d7b48"/>
+                <circle cx="320" cy="112" r="8" fill="#5d7b48"/>
+                <circle cx="342" cy="118" r="8" fill="#5d7b48"/>
+                <circle cx="295" cy="130" r="6" fill="#5d7b48" opacity=".65"/>
+                <path d="M270 132 C315 64,365 70,390 140" fill="none" stroke="#5d7b48" stroke-width="2" stroke-dasharray="7 7"/>
+                <line x1="320" y1="112" x2="335" y2="75" stroke="#5d7b48" stroke-width="3" marker-end="url(#rlArrow)"/>
+                <line x1="342" y1="118" x2="356" y2="86" stroke="#5d7b48" stroke-width="3" marker-end="url(#rlArrow)"/>
+                <text x="72" y="270" fill="#6b6259" font-size="14">只抬高当前策略采到的高回报区域</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-panel" id="panel-opd">
+          <div class="method-card">
+            <div class="method-copy">
+              <h3>数据属于学生，形状来自老师</h3>
+              <p>OPD 像 SFT，因为它有教师信号；也像 RL，因为样本来自学生当前策略。每一步先让学生自己生成状态，再用 reverse KL 让学生 logits 靠近教师 logits。</p>
+              <p>这解释了它为什么能继承 RL 的少遗忘性质，同时又比 outcome reward 更密集：它不是只给一整个 episode 一个分数，而是给 token 级分布形状。</p>
+              <div class="attrs">
+                <div class="attr"><span class="k">target</span><span class="v">教师 logits 分布</span></div>
+                <div class="attr"><span class="k">data</span><span class="v">学生 on-policy 样本</span></div>
+                <div class="attr"><span class="k">gradient</span><span class="v">密集但可能有偏</span></div>
+                <div class="attr"><span class="k">风险</span><span class="v">style token 过更新、熵坍塌</span></div>
+              </div>
+            </div>
+            <div class="viz-body">
+              <svg viewBox="0 0 430 300" role="img" aria-label="OPD updates">
+                <defs><marker id="opdArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#7a5b89"/></marker></defs>
+                <rect width="430" height="300" rx="16" fill="#fffdf7"/>
+                <path d="M38 235 C80 225,82 150,128 150 C178 150,178 220,225 228 C275 236,280 115,328 110 C372 106,378 216,402 230" fill="none" stroke="#40372f" stroke-width="4"/>
+                <path d="M268 150 C300 70,350 58,396 124" fill="none" stroke="#7a5b89" stroke-width="2" stroke-dasharray="7 7"/>
+                <circle cx="300" cy="124" r="7" fill="#7a5b89"/>
+                <circle cx="330" cy="112" r="7" fill="#7a5b89"/>
+                <circle cx="360" cy="122" r="7" fill="#7a5b89"/>
+                <line x1="300" y1="124" x2="312" y2="92" stroke="#7a5b89" stroke-width="3" marker-end="url(#opdArrow)"/>
+                <line x1="330" y1="112" x2="338" y2="78" stroke="#7a5b89" stroke-width="3" marker-end="url(#opdArrow)"/>
+                <line x1="360" y1="122" x2="370" y2="98" stroke="#7a5b89" stroke-width="3" marker-end="url(#opdArrow)"/>
+                <text x="72" y="270" fill="#6b6259" font-size="14">学生自己到达的状态上，学习教师分布形状</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="opsd">
+        <div class="section-kicker">03 · OPD 的一个坑</div>
+        <h2>学生和老师是同一个模型时，高 KL 可能落在 style token 上</h2>
+        <p>文章提到 OPSD：teacher 和 student 是同一个模型，只是 teacher 在算 logits 时拿到了 reference solution prefix。听起来很优雅，但问题也明显：两者大部分 token 的分布都很像，真正拉开 KL 的地方可能不是数学内容，而是「wait」「alright」这类风格转折词。</p>
+        <div class="token-board">
+          <div class="token-col">
+            <h3>Style / Pivot tokens · 高 KL</h3>
+            <p>这些 token 可能只是风格差异，却会收到很强训练信号。</p>
+            <div class="bar"><span>wait</span><div class="track"><div class="fill" style="width:94%"></div></div><span>高</span></div>
+            <div class="bar"><span>alright</span><div class="track"><div class="fill" style="width:86%"></div></div><span>高</span></div>
+            <div class="bar"><span>therefore</span><div class="track"><div class="fill" style="width:78%"></div></div><span>高</span></div>
+            <div class="bar"><span>actually</span><div class="track"><div class="fill" style="width:68%"></div></div><span>中高</span></div>
+          </div>
+          <div class="token-col low">
+            <h3>Math / Content tokens · 低 KL</h3>
+            <p>真正承载任务内容的 token，学生和老师反而常常接近。</p>
+            <div class="bar"><span>power</span><div class="track"><div class="fill" style="width:24%"></div></div><span>低</span></div>
+            <div class="bar"><span>exponent</span><div class="track"><div class="fill" style="width:20%"></div></div><span>低</span></div>
+            <div class="bar"><span>logarithm</span><div class="track"><div class="fill" style="width:16%"></div></div><span>低</span></div>
+            <div class="bar"><span>=</span><div class="track"><div class="fill" style="width:12%"></div></div><span>低</span></div>
+          </div>
+        </div>
+        <div class="note"><strong>为什么要 clipping：</strong>OPSD 的信号是密集的，但不等于无偏。高 KL token 不一定是任务关键 token，所以需要 per-token clipping 防止模型被风格差异带偏。</div>
+      </section>
+
+      <section id="experiment">
+        <div class="section-kicker">04 · 文章最反直觉的实验</div>
+        <h2>两个 OPD 学生几乎不在乎老师是谁</h2>
+        <p>作者用一个 Minimal Code Editing 任务做实验：给模型一个被污染的函数，让它只修 bug，不重写无关部分。这个环境同时测两件事：能否泛化到训练外 corruption，以及是否伤害通用代码能力。</p>
+
+        <div class="exp-table-wrap">
+          <table>
+            <thead>
+              <tr><th>Model</th><th>Pass@1 ↑</th><th>Norm. Levenshtein ↓</th><th>Added CC ↓</th><th>LiveCodeBench v6 ↑</th></tr>
+            </thead>
+            <tbody>
+              <tr class="group"><td colspan="5">Teachers</td></tr>
+              <tr><td>SFT teacher</td><td>0.775</td><td class="bad">0.450</td><td class="bad">0.450</td><td class="bad">0.286</td></tr>
+              <tr><td>RL teacher</td><td>0.792</td><td class="good">0.063</td><td>0.206</td><td class="good">0.320</td></tr>
+              <tr class="group"><td colspan="5">Students · On-Policy Distillation</td></tr>
+              <tr><td>OPD from SFT teacher</td><td class="good">0.800</td><td class="good">0.059</td><td class="good">0.206</td><td>0.297</td></tr>
+              <tr><td>OPD from RL teacher</td><td>0.787</td><td class="good">0.055</td><td>0.228</td><td class="good">0.314</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="finding-grid">
+          <div class="finding"><div class="num">Finding 01</div><h3>两个学生几乎一样</h3><p>OPD-SFT 和 OPD-RL 的差距远小于两个教师之间的差距。教师好坏被学生自己的 on-policy 状态分布大量吸收了。</p></div>
+          <div class="finding"><div class="num">Finding 02</div><h3>学生能反超老师</h3><p>OPD-SFT 的 Pass@1 为 0.800，高于 RL 教师 0.792；OPD-RL 的编辑距离也更低。</p></div>
+          <div class="finding"><div class="num">Finding 03</div><h3>遗忘没有被继承</h3><p>SFT 教师在 LiveCodeBench 上掉到 0.286，但 OPD-SFT 学生回到 0.297。教师退化不等于学生也退化。</p></div>
+        </div>
+      </section>
+
+      <section id="why">
+        <div class="section-kicker">05 · 为什么 RL / OPD 少遗忘</div>
+        <h2>三种解释里，作者真正买账的是 on-policy 数据</h2>
+        <div class="why-grid">
+          <div class="why-card">
+            <h3>解释一：forward KL vs reverse KL</h3>
+            <p>SFT 的交叉熵可看作 forward KL；RL 可被看作 reverse KL。这个解释有帮助，因为 forward KL 更 mode-covering，可能牺牲旧能力。</p>
+            <div class="verdict">局限：太依赖显式 KL 正则，解释不了去掉 KL 后 RL 仍少遗忘。</div>
+          </div>
+          <div class="why-card">
+            <h3>解释二：SFT 的梯度太密太均匀</h3>
+            <p>SFT 每个 token 都被监督，低概率低熵 token 也会被强行拟合；RL 的更新更稀疏，且 advantage normalization 带有数据相关正则。</p>
+            <div class="verdict">局限：能解释 SFT vs RL，但不够自然地解释 OPD。</div>
+          </div>
+          <div class="why-card">
+            <h3>解释三：on-policy 数据就是隐式 KL</h3>
+            <p>如果训练样本来自当前模型，那么可达目标天然离当前策略更近。模型是在自己访问过的状态附近寻找任务解，而不是被拉向任意外部分布。</p>
+            <div class="verdict">作者最认可：这同时解释 RL 和 OPD。</div>
+          </div>
+        </div>
+
+        <figure class="viz-card">
+          <div class="viz-body">
+            <svg viewBox="0 0 860 320" role="img" aria-label="On-policy data selects nearest optimum">
+              <defs><marker id="nearArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#5d7b48"/></marker></defs>
+              <rect width="860" height="320" rx="18" fill="#fffdf7"/>
+              <circle cx="170" cy="172" r="58" fill="#e8dcc7" stroke="#6b6259" stroke-width="2"/>
+              <circle cx="384" cy="90" r="42" fill="#e7eedf" stroke="#5d7b48" stroke-width="2"/>
+              <circle cx="660" cy="225" r="42" fill="#f1e1d4" stroke="#9f4c2f" stroke-width="2"/>
+              <circle cx="595" cy="75" r="42" fill="#eee4f2" stroke="#7a5b89" stroke-width="2"/>
+              <text x="120" y="176" fill="#241f1a" font-size="18" font-weight="700">当前策略 π</text>
+              <text x="350" y="94" fill="#241f1a" font-size="16" font-weight="700">最近可达最优</text>
+              <text x="626" y="229" fill="#241f1a" font-size="16" font-weight="700">远处最优 A</text>
+              <text x="560" y="79" fill="#241f1a" font-size="16" font-weight="700">远处最优 B</text>
+              <line x1="220" y1="150" x2="342" y2="104" stroke="#5d7b48" stroke-width="4" marker-end="url(#nearArrow)"/>
+              <line x1="214" y1="190" x2="620" y2="222" stroke="#9f4c2f" stroke-width="2" stroke-dasharray="8 8"/>
+              <line x1="214" y1="150" x2="554" y2="82" stroke="#7a5b89" stroke-width="2" stroke-dasharray="8 8"/>
+              <text x="285" y="150" fill="#5d7b48" font-size="15">on-policy 倾向选择最近的任务解</text>
+              <text x="438" y="257" fill="#9f4c2f" font-size="14">外部目标可能很远</text>
+              <text x="405" y="55" fill="#7a5b89" font-size="14">外部目标也可能偏到另一边</text>
+            </svg>
+          </div>
+          <figcaption class="viz-caption"><b>几何直觉：</b>存在多个能完成任务的策略。on-policy 训练不是从外部指定一个任意最优点，而是从当前模型会访问的状态出发，倾向走向最近的可行最优。</figcaption>
+        </figure>
+      </section>
+
+      <section id="student">
+        <div class="section-kicker">06 · 为什么学生能超过老师</div>
+        <h2>OPD 监督打在学生自己的错误上，不是老师自己的轨迹上</h2>
+        <div class="two-col">
+          <div class="plain-card">
+            <h3>原因一：teacher advice 落在 student state</h3>
+            <p>传统蒸馏常在教师生成的轨迹上训练学生，但学生测试时未必走到这些状态。OPD 让学生先自己生成 prefix，教师再在这些 prefix 上给 logits 建议，因此监督更贴近学生真正会犯的错。</p>
+          </div>
+          <div class="plain-card">
+            <h3>原因二：匹配分布不是复制 greedy token</h3>
+            <p>KL matching 学到的是教师分布形状，不只是教师最终吐出的一个答案。教师的犹豫、备选路径、风格和不确定性都可能改变学生采样行为，因此学生可能超过教师自己的样本表现。</p>
+          </div>
+        </div>
+        <div class="note"><strong>代价：</strong>OPD 的信号更密，但也更有偏。文章观察到 OPD 的 reward 上升更突然，同时 entropy 更明显坍塌。这可能是 reverse KL mode-seeking 的副作用。</div>
+        <figure class="viz-card">
+          <div class="viz-body">
+            <svg viewBox="0 0 860 330" role="img" aria-label="Reward and entropy curves contrasting RL and OPD">
+              <rect width="860" height="330" rx="18" fill="#fffdf7"/>
+              <text x="42" y="42" fill="#241f1a" font-size="18" font-weight="700">训练曲线的读法：OPD 信号密，但更容易突然收缩分布</text>
+              <line x1="70" y1="270" x2="385" y2="270" stroke="#6b6259" stroke-width="2"/>
+              <line x1="70" y1="80" x2="70" y2="270" stroke="#6b6259" stroke-width="2"/>
+              <text x="74" y="305" fill="#6b6259" font-size="13">RL：reward 慢慢爬升</text>
+              <path d="M85 245 C135 235,160 220,205 195 C250 165,300 138,365 118" fill="none" stroke="#5d7b48" stroke-width="4"/>
+              <path d="M85 120 C145 123,205 132,270 145 C315 154,340 164,365 174" fill="none" stroke="#476b7a" stroke-width="4" stroke-dasharray="7 7"/>
+              <circle cx="365" cy="118" r="5" fill="#5d7b48"/>
+              <circle cx="365" cy="174" r="5" fill="#476b7a"/>
+              <text x="276" y="105" fill="#5d7b48" font-size="13">reward</text>
+              <text x="277" y="192" fill="#476b7a" font-size="13">entropy</text>
+
+              <line x1="475" y1="270" x2="790" y2="270" stroke="#6b6259" stroke-width="2"/>
+              <line x1="475" y1="80" x2="475" y2="270" stroke="#6b6259" stroke-width="2"/>
+              <text x="480" y="305" fill="#6b6259" font-size="13">OPD：reward 突跳，entropy 同步下坠</text>
+              <path d="M490 246 C540 244,565 238,600 228 C620 218,635 148,665 118 C700 84,735 78,770 76" fill="none" stroke="#7a5b89" stroke-width="4"/>
+              <path d="M490 118 C545 120,590 126,620 140 C640 152,652 210,674 236 C700 262,735 266,770 268" fill="none" stroke="#9f4c2f" stroke-width="4" stroke-dasharray="7 7"/>
+              <circle cx="665" cy="118" r="5" fill="#7a5b89"/>
+              <circle cx="674" cy="236" r="5" fill="#9f4c2f"/>
+              <text x="694" y="98" fill="#7a5b89" font-size="13">reward</text>
+              <text x="692" y="246" fill="#9f4c2f" font-size="13">entropy</text>
+            </svg>
+          </div>
+          <figcaption class="viz-caption"><b>为什么这重要：</b>OPD 的 token 级 KL 信号很密，所以能力指标可能很快抬升；但 reverse KL 的 mode-seeking 倾向也可能让分布多样性突然下降。作者没有把这当成定论，只把它当作解释「学生超过老师」时需要记住的副作用。</figcaption>
+        </figure>
+      </section>
+
+      <section id="pipeline">
+        <div class="section-kicker">07 · 放回完整 post-training pipeline</div>
+        <h2>Pretrain → SFT → RL → OPD：每一步解决不同问题</h2>
+        <div class="pipeline">
+          <div class="stage"><b>Pretrain</b><span>建立基础世界知识、语言能力和代码能力，是所有后续塑形的底座。</span></div>
+          <div class="stage"><b>SFT</b><span>适合冷启动：教格式、指令跟随、任务接口，让模型先知道该怎么输出。</span></div>
+          <div class="stage"><b>RL</b><span>适合数学、代码等可验证奖励领域，因为奖励方向更接近真实质量方向。</span></div>
+          <div class="stage"><b>OPD</b><span>适合专家融合与知识/写作等奖励更噪的领域，用更密集的教师分布信号整合能力。</span></div>
+        </div>
+        <p>文章提到 GLM 5、DeepSeek v4 等 pipeline 都把 OPD 放在很靠后的阶段，用来合并专家能力。关键问题不是「RL 一定比 distillation 高级」，而是每个领域该用什么方式训练专家，以及最终怎么把专家能力合回学生。</p>
+        <div class="exp-table-wrap">
+          <table>
+            <thead>
+              <tr><th>领域 / 任务类型</th><th>更自然的专家训练方式</th><th>原因</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>数学、代码、可验证任务</td><td>RL / RLVR</td><td>奖励更接近真实质量，低偏信号足以驱动能力上升。</td></tr>
+              <tr><td>写作、知识、开放问答</td><td>Self-distillation / OPD</td><td>奖励模型或 judge 更有偏，教师分布提供的密集形状可能更有用。</td></tr>
+              <tr><td>最终模型融合</td><td>OPD</td><td>让学生在自己的状态分布上吸收多个专家能力，减少直接继承专家退化。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="future">
+        <div class="section-kicker">08 · 最后的算法问题</div>
+        <h2>下一代算法要同时拿到三件东西</h2>
+        <p>文章最后把问题压成一个很清楚的三角：我们想要 distillation 那样的密集 token 级信号，RLVR 那样低偏的奖励方向，同时保留 RL/OPD 的 on-policy 状态分布。</p>
+        <div class="triad">
+          <div class="triad-card"><h3>密度</h3><p>每个 token 或每个中间状态都有学习信号，避免 outcome reward 只有 episode 级别的稀疏反馈。</p></div>
+          <div class="triad-card"><h3>低偏</h3><p>信号要尽量接近真实任务质量，不能像有偏教师或 reward model 那样把风格误当能力。</p></div>
+          <div class="triad-card"><h3>on-policy</h3><p>状态分布必须属于学生自己，这样更新才不会把模型拉到离当前能力太远的地方。</p></div>
+        </div>
+        <p class="lead">所以，问题的形状已经比答案更清楚：未来算法要像蒸馏一样密、像 RL 一样方向可信、像两者一样从学生自己的状态出发。</p>
+      </section>
+
+      <footer class="source-box">
+        <p>原文：<a href="https://nrehiew.github.io/blog/sft_rl_opd/">SFT, RL, and On-Policy Distillation Through a Distributional Lens</a> · nrehiew。本文是面向中文读者的 visual reading，保留原文核心论点与关键实验数字，并用自制 SVG / 表格重组阅读路径。</p>
+        <p>对照参考：<a href="https://syt-nju.github.io/files/visual-reading/post-training-distributional-view/">syt-nju 的 visual reading 版本</a>。</p>
+      </footer>
+    </article>
+
+    <aside class="toc" aria-label="目录">
+      <b>目录</b>
+      <a href="#tldr">先抓主线</a>
+      <a href="#mental">分布心智模型</a>
+      <a href="#methods">SFT / RL / OPD</a>
+      <a href="#opsd">OPSD 的坑</a>
+      <a href="#experiment">关键实验</a>
+      <a href="#why">为什么少遗忘</a>
+      <a href="#student">学生为何反超</a>
+      <a href="#pipeline">完整 pipeline</a>
+      <a href="#future">下一代算法</a>
+    </aside>
+  </div>
+
+  <script>
+    (function () {
+      const tabs = document.querySelectorAll('.method-tab');
+      const panels = document.querySelectorAll('.method-panel');
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          tabs.forEach((item) => item.classList.remove('active'));
+          panels.forEach((panel) => panel.classList.remove('active'));
+          tab.classList.add('active');
+          const panel = document.querySelector('#panel-' + tab.dataset.target);
+          if (panel) panel.classList.add('active');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
