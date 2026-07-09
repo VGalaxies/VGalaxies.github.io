@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: seer-online-context-learning-rl
+    title: 'Seer 怎么把同步 RL 的 rollout 提速一倍'
+    date: 2026-07-10
+    source_type: paper
+    source_url: 'https://arxiv.org/pdf/2511.14617'
   - slug: post-training-distributional-view
     title: 'SFT、RL、OPD 为什么都绕不开 on-policy 数据'
     date: 2026-05-20

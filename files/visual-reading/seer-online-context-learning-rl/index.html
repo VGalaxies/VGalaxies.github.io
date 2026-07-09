@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seer 怎么把同步 RL 的 rollout 提速一倍</title>
+  <meta name="description" content="把 Seer（Online Context Learning for Fast Synchronous LLM RL）转成中文可视化阅读：rollout 长尾、组内长度与模式相似性、divided rollout、上下文感知调度、分组投机解码。端到端 rollout 吞吐提升 44–104%（最高 2.04×）、长尾延迟下降 72–94%。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}], throwOnError:false});"></script>
+  <style>
+    :root {
+      --bg: #fbf6ea;
+      --panel: #fffaf0;
+      --panel-2: #f4ead7;
+      --panel-3: #ece0cb;
+      --line: #dfd0b8;
+      --ink: #241f1a;
+      --muted: #6b6259;
+      --soft: #8a8073;
+      --accent: #9f4c2f;
+      --accent-soft: #f0e3d3;
+      --warn: #a16033;
+      --shadow: 0 14px 36px rgba(77, 54, 31, .08);
+      --shadow-sm: 0 6px 18px rgba(77, 54, 31, .06);
+      --max: 1160px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.78;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    strong, b { font-weight: 720; }
+    code, kbd { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 30;
+      border-bottom: 1px solid var(--line);
+      background: rgba(251, 246, 234, .95);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      max-width: var(--max); margin: 0 auto;
+      padding: .72rem 1.1rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .brand { color: var(--ink); font-weight: 760; white-space: nowrap; font-size: .96rem; }
+    .brand span { color: var(--accent); }
+    .topnav { display: flex; flex-wrap: wrap; gap: .85rem; font-size: .86rem; align-items: center; }
+    .topnav a { color: var(--muted); }
+    .topnav a.src { color: var(--accent); font-weight: 640; }
+
+    .page {
+      max-width: var(--max); margin: 0 auto;
+      padding: 3rem 1.1rem 5rem;
+      display: grid; grid-template-columns: minmax(0,1fr) 236px;
+      gap: 3rem; align-items: start;
+    }
+    article { min-width: 0; }
+    .toc {
+      position: sticky; top: 4.8rem;
+      padding-left: 1rem; border-left: 1px solid var(--line);
+      color: var(--muted); font-size: .88rem;
+    }
+    .toc b { display: block; color: var(--ink); margin-bottom: .55rem; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; }
+    .toc a { display: block; color: var(--muted); padding: .2rem 0; line-height: 1.35; }
+    .toc a:hover { color: var(--accent); text-decoration: none; }
+
+    .hero { padding-bottom: 2rem; border-bottom: 1px solid var(--line); margin-bottom: 2.6rem; }
+    .eyebrow { color: var(--accent); font-size: .84rem; font-weight: 720; letter-spacing: .02em; margin-bottom: .8rem; }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(2.1rem, 4.6vw, 3.9rem); line-height: 1.08; font-weight: 800; letter-spacing: -.01em; }
+    .hero-sub { margin: 1.1rem 0 0; max-width: 780px; color: var(--muted); font-size: 1.12rem; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.3rem 0 0; }
+    .pill {
+      display: inline-flex; align-items: center; gap: .3rem;
+      border: 1px solid var(--line); border-radius: 999px;
+      background: var(--panel); color: var(--muted);
+      padding: .22rem .66rem; font-size: .82rem;
+    }
+    .pill.venue { background: var(--accent-soft); color: var(--accent); border-color: #e6d3bd; font-weight: 620; }
+    .source-row { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.15rem; font-weight: 640; font-size: .95rem; }
+    .source-row a { border-bottom: 1px solid currentColor; }
+
+    section { margin: 3.8rem 0; scroll-margin-top: 5.2rem; }
+    .kicker { color: var(--accent); font-weight: 720; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; margin-bottom: .5rem; }
+    h2 { margin: 0 0 1rem; font-size: clamp(1.5rem, 2.8vw, 2.15rem); line-height: 1.24; letter-spacing: -.005em; }
+    h3 { margin: 2rem 0 .6rem; font-size: 1.16rem; line-height: 1.4; }
+    p { margin: .9rem 0; }
+    .lead { color: #3d342c; font-size: 1.06rem; }
+    ul, ol { padding-left: 1.3rem; }
+    li { margin: .4rem 0; }
+    .muted { color: var(--muted); }
+
+    .tldr { display: grid; grid-template-columns: 1.15fr .85fr; gap: 1rem; margin: 1.3rem 0 0; }
+    .tldr-main { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 1.2rem 1.3rem; box-shadow: var(--shadow); }
+    .tldr-main b { color: var(--accent); }
+    .metrics { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+    .metric { padding: 1rem 1.1rem; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .metric:nth-child(2n) { border-right: none; }
+    .metric:nth-child(n+3) { border-bottom: none; }
+    .metric .num { font-size: 1.85rem; font-weight: 800; color: var(--accent); line-height: 1.1; letter-spacing: -.01em; }
+    .metric .num small { font-size: .95rem; font-weight: 700; }
+    .metric .lbl { font-size: .82rem; color: var(--muted); margin-top: .25rem; }
+
+    figure { margin: 1.6rem 0; }
+    .fig-frame { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 1rem; box-shadow: var(--shadow-sm); }
+    .fig-frame img { width: 100%; height: auto; display: block; border-radius: 4px; }
+    .fig-cap { font-size: .88rem; color: var(--muted); margin-top: .7rem; }
+    .fig-cap .fnum { color: var(--ink); font-weight: 660; }
+    .fig-toggle { display: inline-block; margin-top: .55rem; color: var(--accent); font-weight: 620; font-size: .86rem; cursor: pointer; user-select: none; }
+    .figure-detail { max-height: 0; overflow: hidden; transition: max-height .4s ease, opacity .3s ease; opacity: 0; }
+    .figure-detail.active { max-height: 5000px; opacity: 1; margin-top: .7rem; }
+    .figure-detail ul { margin: .5rem 0; }
+    .figure-detail li { font-size: .93rem; }
+    .figure-detail .sumup, details.ex .exbody .sumup { margin-top: .6rem; padding-top: .6rem; border-top: 1px dashed var(--line); font-size: .92rem; color: #45392e; }
+
+    .insight { border: 1px solid #e6d3bd; background: linear-gradient(0deg, var(--accent-soft), var(--panel)); border-radius: 10px; padding: 1.15rem 1.3rem; margin: 1.4rem 0; box-shadow: var(--shadow-sm); }
+    .insight .tag { color: var(--accent); font-weight: 720; font-size: .82rem; letter-spacing: .03em; }
+    .quote { border-left: 3px solid var(--accent); padding: .3rem 0 .3rem 1.1rem; margin: 1.3rem 0; color: #45392e; font-size: 1.04rem; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.4rem 0; }
+    .cbox { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm); }
+    .cbox h4 { margin: 0 0 .5rem; font-size: 1.02rem; }
+    .cbox .ico { font-size: 1.3rem; }
+    .cbox p { margin: .5rem 0; font-size: .95rem; color: #453a30; }
+
+    .tech-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; margin: 1.4rem 0; }
+    .tech { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; box-shadow: var(--shadow-sm); overflow: hidden; }
+    .tech-head { display: flex; align-items: flex-start; gap: .9rem; padding: 1.1rem 1.2rem; cursor: pointer; }
+    .tech-head .idx { flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+    .tech-head .t { flex: 1; }
+    .tech-head .t b { font-size: 1.06rem; }
+    .tech-head .t .sub { font-size: .9rem; color: var(--muted); margin-top: .15rem; }
+    .tech-head .chev { color: var(--soft); font-size: .8rem; align-self: center; transition: transform .3s; }
+    .tech.open .chev { transform: rotate(180deg); }
+    .tech-body { max-height: 0; overflow: hidden; transition: max-height .5s ease; }
+    .tech.open .tech-body { max-height: 16000px; }
+    .tech-body-inner { padding: 0 1.2rem 1.2rem; border-top: 1px solid var(--line); }
+    .tech-body-inner p { font-size: .96rem; }
+
+    .flow { display: flex; flex-direction: column; gap: .6rem; margin: 1.1rem 0; }
+    .step { display: flex; gap: .8rem; align-items: flex-start; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: .75rem .9rem; }
+    .step .sn { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--accent); color: #fff; font-size: .78rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .step .sc { font-size: .93rem; }
+    .step .sc b { color: #3a2f26; }
+
+    .pipe { display: flex; flex-wrap: wrap; align-items: stretch; gap: .55rem; margin: 1.2rem 0; }
+    .pnode { flex: 1 1 150px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: .7rem .8rem; box-shadow: var(--shadow-sm); }
+    .pnode .pt { font-weight: 700; font-size: .92rem; }
+    .pnode .pd { font-size: .82rem; color: var(--muted); margin-top: .2rem; }
+    .parrow { align-self: center; color: var(--accent); font-weight: 700; }
+
+    .tbl-wrap { overflow-x: auto; margin: 1.3rem 0; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-sm); }
+    table.data { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--panel); }
+    table.data th, table.data td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid var(--line); }
+    table.data thead th { background: var(--panel-2); font-weight: 700; }
+    table.data tr:last-child td { border-bottom: none; }
+    table.data td.hi { color: var(--accent); font-weight: 700; }
+
+    details.ex { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; margin: 1rem 0; overflow: hidden; }
+    details.ex summary { padding: .8rem 1rem; cursor: pointer; font-weight: 600; font-size: .94rem; color: #3a2f26; list-style: none; }
+    details.ex summary::-webkit-details-marker { display: none; }
+    details.ex summary::before { content: "▸ "; color: var(--accent); }
+    details.ex[open] summary::before { content: "▾ "; }
+    details.ex .exbody { padding: 0 1rem 1rem; font-size: .93rem; }
+    details.ex .exbody pre { background: var(--panel-3); border-radius: 6px; padding: .8rem; overflow-x: auto; font-size: .82rem; line-height: 1.6; }
+    details.ex .exbody table { width: 100%; border-collapse: collapse; margin: .7rem 0; font-size: .84rem; }
+    details.ex .exbody th, details.ex .exbody td { border: 1px solid var(--line); padding: .4rem .55rem; text-align: left; vertical-align: top; }
+    details.ex .exbody th { background: var(--panel-3); font-weight: 600; }
+    details.ex .exbody .katex-display { margin: .5rem 0; overflow-x: auto; overflow-y: hidden; }
+
+    .footer { border-top: 1px solid var(--line); margin-top: 4rem; padding: 2rem 1.1rem 3rem; color: var(--muted); font-size: .9rem; }
+    .footer-inner { max-width: var(--max); margin: 0 auto; }
+    .footer a { color: var(--accent); }
+
+    @media (max-width: 880px) {
+      .page { grid-template-columns: 1fr; gap: 1.5rem; }
+      .toc { display: none; }
+      .tldr, .two-col { grid-template-columns: 1fr; }
+      .pipe { flex-direction: column; }
+      .parrow { transform: rotate(90deg); align-self: flex-start; margin-left: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span>Seer</span> · 同步 RL rollout 加速</div>
+      <nav class="topnav">
+        <a href="#problem">问题</a>
+        <a href="#insight">洞察</a>
+        <a href="#design">三个技术</a>
+        <a href="#eval">结果</a>
+        <a class="src" href="https://arxiv.org/abs/2511.14617" target="_blank" rel="noopener">原文 ↗</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="page">
+    <article>
+      <header class="hero">
+        <div class="eyebrow">论文可视化阅读 · LLM 强化学习系统</div>
+        <h1>Seer 怎么把同步 RL 的 rollout 提速一倍</h1>
+        <p class="hero-sub">同一个 prompt 采样出的一组回答，长度和 token 模式高度相似。Seer 把这个「组内相似性」当成在线信号，用来做调度和投机解码，在不破坏 on-policy 约束的前提下把端到端 rollout 吞吐提升 44–104%（最高 2.04×）。</p>
+        <div class="meta-row">
+          <span class="pill venue">arXiv preprint · 2025.11</span>
+          <span class="pill">Moonshot AI（Kimi）· 清华</span>
+          <span class="pill">同步 / on-policy RL</span>
+          <span class="pill">rollout 系统优化</span>
+        </div>
+        <div class="source-row">
+          <a href="https://arxiv.org/abs/2511.14617" target="_blank" rel="noopener">阅读原文 ↗</a>
+          <a href="https://arxiv.org/pdf/2511.14617" target="_blank" rel="noopener">PDF ↗</a>
+        </div>
+      </header>
+
+      <section id="tldr">
+        <div class="kicker">TL;DR</div>
+        <h2>30 秒抓住核心</h2>
+        <div class="tldr">
+          <div class="tldr-main">
+            <p style="margin-top:0">训练推理型大模型时，RL 的 <b>rollout（生成阶段）吃掉约 80% 的迭代时间</b>。长 CoT 让输出长度从几百到 9.8 万 token 不等，方差极大，导致两个致命问题：显存忽大忽小触发抢占、以及少数超长请求拖出的<b>长尾</b>。</p>
+            <p>Seer 的破局点：GRPO 对同一个 prompt 采样 8–16 个回答，<b>这一组回答的长度和 token 模式天然相似</b>。Seer 把这个信号在线学出来，用三招——<b>拆分 rollout</b>、<b>上下文感知调度</b>、<b>分组投机解码</b>——精准调度并加速，而且完全等价于同步 on-policy 训练，结果无损。</p>
+          </div>
+          <div class="metrics">
+            <div class="metric"><div class="num">44–104<small>%</small></div><div class="lbl">端到端 rollout 吞吐提升（对 SOTA 同步系统 veRL，最高 2.04×）</div></div>
+            <div class="metric"><div class="num">72–94<small>%</small></div><div class="lbl">长尾延迟下降</div></div>
+            <div class="metric"><div class="num">~80<small>%</small></div><div class="lbl">rollout 占 RL 迭代总时间</div></div>
+            <div class="metric"><div class="num">0</div><div class="lbl">算法精度损失（严格 on-policy）</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="problem">
+        <div class="kicker">问题</div>
+        <h2>为什么 rollout 是同步 RL 的瓶颈</h2>
+        <p class="lead">RL 训练在两个阶段之间来回切换：<strong>rollout 阶段</strong>用当前策略采样生成回答，<strong>training 阶段</strong>用这些回答更新参数。问题是 rollout 太慢——在三个真实生产任务上，它平均吃掉约 80% 的迭代时间。</p>
+
+        <div class="tbl-wrap">
+          <table class="data">
+            <thead><tr><th>任务</th><th>Rollout</th><th>Training</th><th>Weight Update</th></tr></thead>
+            <tbody>
+              <tr><td>Moonlight</td><td class="hi">84%</td><td>14%</td><td>2%</td></tr>
+              <tr><td>Qwen2-VL-72B</td><td class="hi">63%</td><td>31%</td><td>6%</td></tr>
+              <tr><td>Kimi-K2</td><td class="hi">87%</td><td>10%</td><td>3%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:.88rem;margin-top:-.6rem">表 1：三个推理型 RL 任务里各阶段的时间占比。rollout 是绝对大头。</p>
+
+        <p>根因在于<strong>长生成</strong>。为了训练 long-CoT 推理能力，模型被鼓励写出越来越长的思维链，这带来两个特征：<strong>平均输出很长</strong>（几万 token）+ <strong>长度方差极大</strong>（几百到 9.8 万 token）。下图是三个任务的输出长度分布。</p>
+
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page2_idx3.jpg" alt="三个推理任务的输出长度分布" loading="lazy">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 2</span>：rollout 中三个推理任务的输出长度分布，跨度从几百到 9.8 万 token，均值高、方差大。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><b>横轴</b>是输出 token 数（可到 ~98K），<b>纵轴</b>是请求数量的分布密度。</li>
+                <li>分布呈<b>重尾（heavy-tailed）</b>形态：大量请求集中在中短长度，但有一条长长的尾巴延伸到几万 token。</li>
+                <li>这条尾巴正是麻烦所在：<b>少数超长请求</b>会在 rollout 后期独占 GPU，而其它实例早已空闲。</li>
+              </ul>
+              <div class="sumup">一句话：输出长度既长又极不均匀，这是后面所有调度和显存问题的总根源。</div>
+            </div>
+          </div>
+        </figure>
+
+        <h3>两个具体挑战</h3>
+        <div class="two-col">
+          <div class="cbox">
+            <div class="ico">💾</div>
+            <h4>挑战 #1：显存需求剧烈波动</h4>
+            <p>一个 long-CoT 请求的 KVCache 可从几百 MB 涨到几十 GB，GRPO 里还要 ×<em>n</em>（每个 prompt 采 n 个回答）。</p>
+            <p>高并发 → 后期显存爆掉、触发<strong>抢占（preemption）</strong>和昂贵的重新 prefill；低并发 → 早期显存严重闲置。两难。</p>
+          </div>
+          <div class="cbox">
+            <div class="ico">🐢</div>
+            <h4>挑战 #2：严重的长尾效应</h4>
+            <p>长尾阶段可占到 rollout 总时间的近 <strong>50%</strong>。到迭代末尾，只剩几个超长请求在少数实例上跑，其余算力全空转。</p>
+            <p>成因：同组请求长度相近，超长组形成「铁板一块」的 batch 造成实例间负载失衡；显存受限时长请求还会被延后，雪上加霜。</p>
+          </div>
+        </div>
+
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page2_idx4.jpg" alt="rollout 中 KVCache 利用率与运行请求数" loading="lazy">
+            <img src="imgs/cropped_page2_idx5.jpg" alt="rollout 中的请求抢占次数" loading="lazy" style="margin-top:.7rem">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 3</span>：Qwen2-VL-72B 任务一次同步 rollout 中的 (a) KVCache 利用率与运行请求数、(b) 请求抢占次数。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><b>早期阶段</b>：KVCache 容量不足，请求频繁被抢占（preemption count 高），系统忙于重新 prefill 而非有效生成。</li>
+                <li><b>中后期</b>：随着短请求陆续完成，运行请求数骤降，<b>KVCache 利用率随之跌落</b>——大量显存闲置。</li>
+                <li>两条曲线共同说明：固定并发策略无论调高调低都会在某个阶段浪费资源，这正是 Seer 要用<b>细粒度动态调度</b>解决的。</li>
+              </ul>
+              <div class="sumup">一句话：传统调度让显存要么被挤爆、要么被浪费，全程很难保持高利用率。</div>
+            </div>
+          </div>
+        </figure>
+
+        <h3>已有方案卡在哪</h3>
+        <p>rollout 的低效（利用率低 + 长尾）逼出了两条提速路线，各治一端，但都有代价：</p>
+        <ul>
+          <li><strong>路线一 · 异步 RL</strong>（StreamRL、AReaL、AsyncFlow 等）：<b>目标是提升整体硬件利用率</b>——让 rollout 和 training 重叠、不互相等。但这引入 <strong>off-policy</strong>——用第 <em>i</em> 步的参数生成的数据去训第 <em>i+1</em> 步甚至更后面的模型，还会有分布偏移（短样本先跑完、过度占据早期 batch），损害最终效果、也难复现调试。</li>
+          <li><strong>路线二 · 投机解码（SD）</strong>：<b>目标是加速长尾那种低并发、访存受限（memory-bound）的生成</b>——靠并行验证把闲置算力用起来。难点在于 RL 里「draft 精度」和「draft 开销」很难兼得，具体又分两支：
+            <ul style="margin:.35rem 0">
+              <li><strong>基于模型的 SD（model-based）</strong>：用一个小 draft 模型（EAGLE、Medusa 等）。但 RL 里 target 模型每轮都在变，静态 draft 很快「过时」（model drift），接受率崩塌；draft 模型本身也带来毫秒级延迟和显存开销，大 batch 下不划算。</li>
+              <li><strong>免模型的 SD（model-free）</strong>：n-gram 类方法要拿整个输入序列做匹配，长上下文下开销大，也难以低复杂度地聚合多个候选匹配。而 RhymeRL、SPEC-RL 这类方法<strong>依赖上一轮迭代的历史序列</strong>做参考——但 SOTA 训练里每轮都采样不同数据以提升泛化，<strong>根本没有历史序列可复用</strong>。</li>
+            </ul>
+          </li>
+        </ul>
+        <p class="muted" style="font-size:.92rem">Seer 的取舍：<b>路线一不走</b>——坚持同步 on-policy，只把同步 rollout 本身做快（靠 divided rollout + 上下文调度治利用率与长尾）；<b>路线二走 model-free 的一个新变体</b>——不靠跨轮历史，而是靠<strong>同一轮迭代内的组内上下文</strong>构造草稿。</p>
+        <div class="quote">之所以不走异步：很多 RL 实验为了收敛质量、奖励稳定与可复现，仍然坚持<strong>同步（on-policy）</strong>训练。Seer 的定位就是在这个前提下，把同步 rollout 本身做快。</div>
+      </section>
+
+      <section id="insight">
+        <div class="kicker">核心洞察</div>
+        <h2>被忽略的免费信号：组内相似性</h2>
+        <p class="lead">GRPO 这类算法对<strong>同一个 prompt 采样 <span class="katex-inline">\(n\)</span> 个（通常 8–16，BroRL / Knapsack RL 甚至扩到 512+）回答</strong>，用组内奖励归一化算优势值。现有系统把「一组」当成一个不可分的调度单元丢给某个实例，却忽略了一个免费信号——</p>
+        <details class="ex">
+          <summary>GRPO 的组内归一化（可选，RL 背景补充）</summary>
+          <div class="exbody">
+            <p>GRPO 不需要 critic 价值网络。对每个 prompt，从当前策略采样一组 <span class="katex-inline">\(n\)</span> 个回答，用规则或奖励模型打分得到 <span class="katex-inline">\(r_1,\dots,r_n\)</span>，再<strong>在组内归一化</strong>得到每个回答的优势：</p>
+            <pre>Aᵢ = (rᵢ − mean(r₁…rₙ)) / std(r₁…rₙ)</pre>
+            <p>然后用带 clip 的比值损失 + 对参考模型的 KL 正则更新策略。「一个 prompt → 一组回答」这个结构是所有 GRPO 变体（DAPO、GSPO 等）都保留的核心——也正是组内相似性信号的来源。</p>
+          </div>
+        </details>
+
+        <div class="insight">
+          <div class="tag">KEY OBSERVATION</div>
+          <p style="margin:.4rem 0 0">同一组回答因为条件在同一个 prompt 上，天然在<strong>生成长度</strong>和<strong>局部 token 模式</strong>上高度相似。长度反映题目难度，模式反映措辞结构。这两个信号如果在线学出来，就能同时指导「怎么调度」和「怎么加速生成」。</p>
+        </div>
+
+        <h3>信号一：长度相似 → 可用于调度</h3>
+        <p>同组回答的长度高度可预测。这意味着只要<strong>先跑完组里的一个「探针」请求</strong>，就能估计整组剩下的工作量（预期长度、KVCache 占用），据此做更聪明的调度，而不是靠静态启发式瞎猜。</p>
+
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page3_idx6.jpg" alt="response group 内的长度相关性热力图" loading="lazy">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 4</span>：组内长度相关性。每一列是一个 prompt 组，每个格子是一个回答，颜色深浅表示输出长度。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><b>每一列</b>代表 GRPO rollout 里的一个 prompt 组，<b>每个格子</b>是该组的一个独立回答。</li>
+                <li><b>颜色深浅</b>编码输出长度：越深越长。</li>
+                <li>关键现象：<b>同一列内的格子颜色高度一致</b>——同组回答长度相近。而不同列之间差异很大，说明「难题组」和「易题组」泾渭分明。</li>
+                <li>这正是「跑一个探针就能估计整组」的依据：组内一致性高，用组里已完成请求的最大长度做估计就足够准。</li>
+              </ul>
+              <div class="sumup">一句话：长度信息按「组」聚集，先探一个就能预判一整组，这让近似「最长优先」调度成为可能。</div>
+            </div>
+          </div>
+        </figure>
+
+        <h3>信号二：模式相似 → 可用于投机解码</h3>
+        <p>同组回答在语义和结构上也相似。虽然不像前缀完全匹配那样精确，但足以构造一个<strong>分组模式字典</strong>，给 <b>n-gram 投机解码</b>提供高质量草稿 token。作者做了实验验证：从一个 Qwen2-VL-72B 任务里采样 20 个 prompt 组，用<strong>压缩后缀树（CST）</strong>模拟投机解码，把「组内其它回答」当作参考模式。先补两点背景，再看数据。</p>
+
+        <details class="ex">
+          <summary>什么是 n-gram 投机解码？CST 又是怎么「模拟」的</summary>
+          <div class="exbody">
+            <p><b>① 投机解码（SD）两阶段</b>：<b>Draft</b> 阶段先用一个「草稿模型」快速吐出 <span class="katex-inline">\(\gamma\)</span> 个候选 token；<b>Verification</b> 阶段让 target 模型（策略 LLM）<b>一次并行验证</b>这 <span class="katex-inline">\(\gamma\)</span> 个。因为并行验证 <span class="katex-inline">\(n\)</span> 个 token 比串行逐个生成快（访存开销更低），只要草稿命中就净赚。RL rollout 的两个麻烦：batch 剧烈波动、target 模型每轮更新导致<b>模型漂移</b>——传统 SD 要么草稿开销大、要么接受率低，收益甚至为负。</p>
+            <p><b>② n-gram（免模型）SD</b>：干脆不用独立草稿模型，而是把「最近生成的一小段 token」当查询键，去一个<b>模式字典</b>里查「历史上以相同片段结尾、后面接了什么」，直接拿这段延续当草稿。好处是省掉了草稿模型的前向开销；但<b>朴素 n-gram</b> 要拿整个输入序列做匹配，长上下文下开销大，而且只用请求<b>自身</b>历史做参考、接受率低。Seer 的改法：把字典的来源换成<b>同组其它回答</b>。</p>
+            <p><b>③ CST 的结构 + 怎么模拟 SD</b>（论文只引用 <b>SuffixDecoding [27]</b> 与 <b>CST [44]</b>、未展开，以下按被引原文补充）：</p>
+            <p style="margin:.3rem 0"><b>压缩后缀树长什么样</b>：把参考序列的<b>所有后缀</b>塞进一棵 trie，再把「没有分叉的链」压成一条边（边上带<b>一整段 token</b> 而非单个）——于是节点数与序列总长成线性（后缀树经典构造，Weiner 1973），节点上再记<b>出现频次</b>。多条回答共享同一棵树（generalized suffix tree），公共模式自动合并计数。</p>
+            <pre>组内参考序列(token):   r1: … A B C D E     r2: … A B C D F     r3: … A B X
+
+压缩后缀树(只画 "A B" 之后的子树):
+   ─"A B"─┬─"C D"─┬─ E   (freq 1)      ← "C D" 是压缩边:r1/r2 都走过 → freq 2
+          │       └─ F   (freq 1)
+          └─ X          (freq 1)</pre>
+            <ul>
+              <li><b>每步取草稿（匹配）</b>：拿当前请求<b>已生成的末尾几个 token</b> 当查询 pattern，从根沿 pattern 下降到最深命中节点，它的<b>子树就是候选延续</b>——本质是「组内别人写到这儿时，接下来通常写什么」。上例查 "A B" → 命中后 "C D" 两条参考都走过（freq 2）⇒ 高置信、整段当草稿。</li>
+              <li><b>打分 &amp; 决定草稿多长（SuffixDecoding [27]）</b>：给每条候选延续按<b>经验条件频率连乘</b>算 confidence（沿路径每步 = 该 token 频次 ÷ 父节点频次），<b>贪心/beam 往下扩展、一旦低于阈值就截断</b>。截断点顺带定了草稿长度——匹配越一致、confidence 掉得越慢，草稿越长，这正是它「<b>自适应</b>」的来源（无需外部指定 <span class="katex-inline">\(\gamma\)</span>）。</li>
+              <li><b>Linear vs Multi-Path</b>（表 2 两列）：分叉处（上例的 E / F）只押最高频的一条 = <b>Linear</b>；用 <b>top-<span class="katex-inline">\(k\)</span> 分支（beam-search）</b>同时押多条 = <b>Multi-Path</b>，命中概率更高，长尾并发低、算力富余时尤其划算。</li>
+            </ul>
+            <div class="sumup">一句话：CST 把「组内其它回答」压成一棵可快速匹配的后缀树，当步就用它做 n-gram 参考来猜下一段 token——草稿来自当前策略自己的同组输出，所以天然不漂移。表 2 就是用这套模拟量出的接受长度。</div>
+          </div>
+        </details>
+
+        <div class="tbl-wrap">
+          <table class="data">
+            <thead><tr><th><span class="katex-inline">\(n\)</span>（同组参考回答数）</th><th>Linear</th><th>Multi-Path (<span class="katex-inline">\(k=2\)</span>)</th><th>Multi-Path (<span class="katex-inline">\(k=4\)</span>)</th></tr></thead>
+            <tbody>
+              <tr><td><span class="katex-inline">\(n=0\)</span>（baseline，只用自身历史）</td><td>1.70</td><td>1.77</td><td>1.85</td></tr>
+              <tr><td><span class="katex-inline">\(n=1\)</span></td><td>2.04</td><td>2.14</td><td>2.25</td></tr>
+              <tr><td><span class="katex-inline">\(n=5\)</span></td><td>2.32</td><td>2.44</td><td>2.59</td></tr>
+              <tr><td><span class="katex-inline">\(n=15\)</span></td><td class="hi">2.53</td><td class="hi">2.69</td><td class="hi">2.85</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:.88rem;margin-top:-.6rem">表 2：不同草稿策略下的平均接受长度（含 bonus token）。参考数量 <span class="katex-inline">\(n\)</span> 从 0→1→5→15 递增，接受长度持续上升（scaling 关系）；多路草稿（multi-path）进一步提升。</p>
+        <p>结论很直接：<strong>组内其它回答就是最好的免费 draft model</strong>——它天然和 target 模型同步（都是当前策略生成的），完全不存在传统 SD 的「模型漂移」问题。</p>
+      </section>
+
+      <section id="design">
+        <div class="kicker">本文方法</div>
+        <h2>Seer：把组内信号在线学出来用</h2>
+        <p class="lead">Seer 的整体流水线仍是标准配置：训练用 <b>Megatron</b>、rollout 用 <b>vLLM</b> + 异步 reward 计算、权重下发用 <b>Moonshot Checkpoint Engine</b>。Seer 的三个技术是<b>叠加在这套常规架构之上</b>的，不引入额外集成开销。rollout 子系统由三个核心模块组成。先看整体架构，再逐个拆解。</p>
+
+        <div class="pipe">
+          <div class="pnode"><div class="pt">Inference Engine Pool</div><div class="pd">推理实例 + 分布式 KVCache 池，负责执行请求、负载均衡与缓存复用</div></div>
+          <div class="parrow">↔</div>
+          <div class="pnode"><div class="pt">Request Buffer</div><div class="pd">所有请求的统一入口，管理输入/输出/运行时状态，支撑「拆分 rollout」</div></div>
+          <div class="parrow">↔</div>
+          <div class="pnode"><div class="pt">Context Manager</div><div class="pd">维护<b>组级</b>上下文视图，基于长度上下文给出调度决策</div></div>
+        </div>
+
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page4_idx7.jpg" alt="Seer 系统架构总览" loading="lazy">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 5</span>：Seer 系统总览。三大模块协同实现细粒度调度与在线上下文学习。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <ul>
+                <li><b>Request Buffer</b>：请求的中枢。一个 prompt 组被拆成 <span class="katex-inline">\(n\)</span> 个独立请求，每个请求再切成更小的 chunk，带着 group ID、prompt 长度、已生成长度等元数据在这里排队、出队、回队。</li>
+                <li><b>Context Manager</b>：为每个组维护「预估输出长度」等上下文视图，是调度决策的大脑；探针请求跑完后实时更新这里的长度估计。</li>
+                <li><b>Inference Engine Pool</b>：一组推理实例 + 跨节点的<b>全局 KVCache 池</b>（继承自 Mooncake，DRAM/SSD 两级）。请求被迁移到不同实例时，KVCache 不用重算，直接从池里取。</li>
+                <li><b>数据流</b>：Buffer 按调度策略把 chunk 派给最空闲的实例 → 实例生成 → 结果和长度信息回流到 Context Manager → 更新调度决策 → 下一个 chunk 重新派发。如此循环直到 &lt;eos&gt; 或达到 max_tokens。</li>
+              </ul>
+              <div class="sumup">一句话：Buffer 负责「拆」，Context Manager 负责「学」，Engine Pool 负责「跑」，三者构成一个在线学习-调度闭环。</div>
+            </div>
+          </div>
+        </figure>
+
+        <p>下面这张对比图，是理解 Seer 的关键：<b>(a) 传统 group-level rollout</b> vs. <b>(b) Seer 的 divided rollout</b>。图分上下两大行，每行又分左右——<b>左看「实例之间」</b>、<b>右看「单个实例内部」</b>。读图前先记住两条编码规则：<b>方块高度 = 请求长度</b>（越高越长），<b>方块宽度 / 竖切厚度 = batch size</b>（同时在跑几个请求）。</p>
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page1.jpg" alt="图 1：长生成 rollout 的挑战与 Seer 的解法（传统 group-level vs. Seer divided rollout）" loading="lazy">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 1</span>：长生成 rollout 的挑战与 Seer 的解法。<b>(a) 上行——传统组级 rollout</b> 把请求组当整块：左边是<b>实例间失衡</b>（长组独占某些实例、其它早早闲置），右边是<b>实例内失衡</b>（组内长短混杂，OOM 触发抢占重算 / 后期利用率低）。<b>(b) 下行——Seer</b> 把组拆成请求、再拆成 chunk 自由流动：左边三实例负载齐平、几乎同时完成，右边显存稳贴 100%、省出 <b>Saved Time</b>。
+            <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+            <div class="figure-detail">
+              <p style="margin:.2rem 0 .5rem"><b>图例</b>：三种填充 = 三个 request group（同一 prompt 采样出的一组回答）——绿色实心=组1、橙色斜纹=组2、蓝色点阵=组3。<b>高度=请求长度，宽度/竖切厚度=并发的请求数（batch size）</b>。</p>
+              <p style="margin:.6rem 0 .3rem"><b>(a) 传统做法的两个「病」</b></p>
+              <ul>
+                <li><b>左·实例间失衡（Inter-instance）</b>：纵轴是时间，横轴是三个实例。传统做法把<b>一整组绑死在一个实例</b>上跑到完。分到长组（绿）的实例那一柱又高又窄、要跑很久；分到短组（蓝）的实例又矮又宽、很快跑完就闲着——<b>三个实例完成时间差很远，闲置=长尾</b>。</li>
+                <li><b>右·实例内失衡（Intra-instance）</b>：注意这一块画的是<b>同一个实例内部</b>随时间的变化，<b>不是三个实例</b>。上下两个子图共享同一条时间横轴：
+                  <ul style="margin:.3rem 0">
+                    <li><b>上子图 = 该实例的 KV-usage（显存）</b>：锯齿形——生成 token 显存往上涨，一旦顶到 <b>100%（OOM）</b>就被迫抢占、掉一个齿；后期长请求主导、并发变低，锯齿越来越小 → <b>Low Util.（利用率低）</b>。</li>
+                    <li><b>下子图 = 该实例每一刻在跑哪些请求</b>（类甘特图）：<b>三行 = 这个实例里并发的三个执行槽</b>，某一刻竖切的厚度就是那一刻的 batch size，直接对应上子图的显存高低。</li>
+                    <li><b>为什么第一行没抢占、二三行有？</b> 显存撞到 100% 装不下时，调度器必须「<b>保少数、踢多数</b>」：<b>第一行是被选中保下来的请求</b>，KVCache 不动、一路跑完，所以无抢占；<b>第二、三行被驱逐（preempt）</b>，KVCache 被清掉腾显存，过一会儿再调度回来时缓存已没、得<b>从头重算（recompute）</b>——图中两条<b>红色虚线箭头</b>就是被踢的请求被推到更晚才恢复执行，中间那段全是浪费。</li>
+                  </ul>
+                </li>
+              </ul>
+              <p style="margin:.6rem 0 .3rem"><b>(b) Seer 的「药」</b></p>
+              <ul>
+                <li><b>左·实例间均衡</b>：组被拆成请求、再拆成小 chunk，靠动态负载均衡把长短请求摊到每个实例 → 三实例<b>高度齐平、几乎同时完成</b>，没人早退闲置。</li>
+                <li><b>右·实例内均衡</b>：chunk 级的显存 footprint 可控，<b>不再需要「踢人」</b>；上子图锯齿稳稳贴近 100%、没有后期塌陷，且更早结束 → 右侧 <b>Saved Time</b> 箭头就是收益。</li>
+                <li><b>迁移能力</b>：每次 chunk 重新入队时派给当前最空闲的实例；靠全局 KVCache 池，迁移不需要重算 prefill。</li>
+              </ul>
+              <div class="sumup">一句话：「整组绑死一个实例」会同时制造实例间（有人忙死有人闲死）和实例内（撞 100% 抢占重算、后期又空）两种失衡；Seer 把粒度打细到 chunk + 用组内上下文调度，把两种失衡一起抹平，省出图上那段 Saved Time。</div>
+            </div>
+          </div>
+        </figure>
+
+        <h3 style="margin-top:2.6rem">三个协同技术</h3>
+        <p class="muted" style="margin-top:0">点开每张卡片看完整方法。三招层层递进：先拆解出调度自由度，再用长度信号做聪明调度，最后用模式信号加速生成。</p>
+
+        <div class="tech-grid">
+          <div class="tech" id="t1">
+            <div class="tech-head" onclick="toggleTech('t1')">
+              <div class="idx">1</div>
+              <div class="t">
+                <b>Divided Rollout（拆分 rollout）+ 全局 KVCache</b>
+                <div class="sub">解决挑战 #1：把组拆成请求、再拆成 chunk，换来细粒度负载均衡与稳定显存</div>
+              </div>
+              <div class="chev">▼</div>
+            </div>
+            <div class="tech-body"><div class="tech-body-inner">
+              <p><b>它要解决什么</b>：传统调度里，请求一旦分到某个实例就绑死到跑完；组被当成整块，既造成实例间失衡，又浪费了组内相似性。</p>
+              <p><b>核心做法</b>：Seer 基于 Request Buffer 做细粒度控制——一个组不仅拆成 n 个独立请求，每个请求还按生成长度切成多个 <b>chunk</b>。派发时把 max_tokens 设成一个较小的 chunk；跑完这个 chunk 就重新入队，反复提交，直到吐出 &lt;eos&gt; 或达到原始 max_tokens。</p>
+              <div class="flow">
+                <div class="step"><div class="sn">A</div><div class="sc"><b>细粒度显存管理</b>：每个请求只按小 chunk 生成，KVCache 占用近似恒定。调度器能动态算出「不触发抢占的最大并发」，早期塞满、后期收紧，全程高利用率。</div></div>
+                <div class="step"><div class="sn">B</div><div class="sc"><b>动态负载均衡</b>：调度粒度从「每组选 1 次实例」变成「每个 sub-request 选 n 次」。每次 chunk 重新提交时，选当前 in-flight 并发和显存占用最低的实例，摊平实例间负载。</div></div>
+                <div class="step"><div class="sn">C</div><div class="sc"><b>全局 KVCache 池</b>：为什么非要全局池？一次 rollout 迭代能产生<b>数十 TB</b> KVCache，远超单机 DRAM 容量；而 chunk 级重调度又会跨实例、导致本地缓存 miss。所以 Seer 基于 Mooncake 构建跨节点共享的分层 KVCache 池（DRAM/SSD 两级 + <b>RDMA</b> 跨节点快速传输）。请求迁移到新实例时不用重算 prefill——这是「自由流动」不付出重算代价的前提。</div></div>
+              </div>
+              <p class="muted" style="font-size:.9rem">对比：相比被抢占触发的「被动 offload」，divided rollout 是主动迁移、不阻塞推理；相比在线服务的 live migration（如 Llumnix），它没有严格的 per-request SLO 约束，调度更灵活。</p>
+            </div></div>
+          </div>
+
+          <div class="tech" id="t2">
+            <div class="tech-head" onclick="toggleTech('t2')">
+              <div class="idx">2</div>
+              <div class="t">
+                <b>Context-Aware Scheduling（上下文感知调度）</b>
+                <div class="sub">解决挑战 #2：用探针请求估计组长度，做近似「最长优先」调度，砍掉长尾</div>
+              </div>
+              <div class="chev">▼</div>
+            </div>
+            <div class="tech-body"><div class="tech-body-inner">
+              <p><b>它要解决什么</b>：即便实例间均衡了，实例内仍有失衡——显存受限时，朴素调度会把长请求一直往后拖，长尾照旧。</p>
+              <p><b>核心做法</b>：利用「同组长度相似」的信号。Seer 为<b>每组指定一个请求作为 speculative request（探针）</b>，高优先级先跑，在线估计整组的预期长度和显存占用。论文把它拆成<b>三个核心思想</b>（原文称「三个概念性阶段 conceptual phases」）——但注意它们在算法里是<b>交织执行</b>的，并非严格先后的三步：</p>
+              <div class="flow">
+                <div class="step"><div class="sn">A</div><div class="sc"><b>Length Filtering（长度过滤）</b>：探针请求放进高优先队列，用 <b>SFS（最短优先）</b>调度——总是选已生成 token 最少的。短请求快速跑完退出，长请求留下来「暴露」自己是潜在长尾。</div></div>
+                <div class="step"><div class="sn">B</div><div class="sc"><b>Length Estimation Update（长度估计更新）</b>：Context Manager 为每组维护预估长度，取组内已完成请求的<b>最大生成长度</b>；<b>持续</b>更新。若组内还没有请求完成，就保守地设成原始 max_tokens，当作长尾候选。</div></div>
+                <div class="step"><div class="sn">C</div><div class="sc"><b>近似 LFS 调度</b>：探针都在跑或跑完后，切换到<b>近似最长优先（LFS）</b>——优先调度预估长度最长的组，让长请求尽早开始、和短请求并行，最大化 batch 密度。</div></div>
+              </div>
+              <p class="muted" style="font-size:.9rem">三者不是「先做完 A、再做 B、最后 C」：<b>B（估计更新）发生在每次决策的扫描过程中</b>、随时进行；<b>A 与 C 其实是同一步「选下一个请求」的两个分支</b>——高优队列 Q_spec 非空就用 SFS 选探针（A），否则用 LFS 选长组（C）。下面伪代码可以对照看。</p>
+              <p><b>防偏差设计</b>：为缓解长度预测的偏斜，调度器会<b>间歇性地</b>调度那些「获得执行时间偏少」的 underserved 组以防饥饿，并用「目前观测到的最大长度」保守更新估计。实验显示这套近似调度能把长尾延迟<b>降低 89%</b>，吞吐达到「知道所有真实长度的 Oracle 调度器」的 <b>96%</b>。</p>
+              <details class="ex">
+                <summary>Algorithm 2：Context-Aware Scheduling（伪代码）</summary>
+                <div class="exbody">
+                  <p>调度器被全局循环<b>持续调用</b>，每次返回一个决策 <span class="katex-inline">\((r^{\star}, i^{\star})\)</span>（把选中的请求 <span class="katex-inline">\(r^{\star}\)</span> 派给实例 <span class="katex-inline">\(i^{\star}\)</span>），直到所有请求完成。符号：<span class="katex-inline">\(\mathcal{R}\)</span> 活跃请求（按 prompt 组 g 组织）、<span class="katex-inline">\(\widehat{L}_g\)</span> 组级长度估计、<span class="katex-inline">\(I\)</span> 带 KV-usage 遥测的实例。看单次调用里 A/B/C 三个思想是怎么<b>交织</b>的（右侧注释标出各行落在哪个思想）：</p>
+                  <pre>输入: 活跃请求 R = {r_{g,i}}（按组 g）; 组级长度估计 {L̂_g}; 带 KV-usage 遥测的实例 I
+输出: 一个调度决策 (r*, i*)
+
+# 扫一遍做三分类；分类的同时顺手更新估计
+for r_{g,i} ∈ R:
+    if r_{g,i} 已完成:  L̂_g ← max(L̂_g, L_{g,i}); 移出 R   # B 估计更新（发生在扫描中）
+    elif r_{g,i} 是探针:  放入高优队列 Q_spec              # A 探针进高优
+    else:  放入低优候选集 C_rest
+
+# 选下一个请求：A 与 C 是这一步的两个分支
+if Q_spec 非空:   r* ← Q_spec 中已生成长度最短的      # A 长度过滤：探针 SFS
+elif C_rest 非空: r* ← C_rest 中 L̂_g 最大的组的请求   # C 近似 LFS
+else:             return 全部完成
+
+# 切 chunk + 按 KV 用量选实例
+r*.max_tokens ← min(chunk_size, r*.剩余 max_tokens)
+i* ← SELECTINSTANCE(I, r* 的 chunk KV 需求, KV-usage)
+return (r*, i*) if i* 存在 else 本轮无可用实例</pre>
+                  <p class="muted" style="font-size:.86rem">可以看到 A/B/C 并不各占一段：<b>B（估计更新）嵌在分类扫描里</b>，每次调用都在跑；<b>A 与 C 是「选请求」这一步的两个互斥分支</b>——有探针候选就走 A 的 SFS，没有才落到 C 的 LFS。最后 <code>SELECTINSTANCE</code> 结合本 chunk 的 KV 需求与各实例遥测选目标，隐含「该实例装得下这个 chunk 的 KV 增量」。防饥饿（间歇调度 underserved 组）与「组内没请求完成时 L̂_g 保守设为 max_tokens」是主循环<b>之外</b>的 safeguard。</p>
+                </div>
+              </details>
+            </div></div>
+          </div>
+
+          <div class="tech" id="t3">
+            <div class="tech-head" onclick="toggleTech('t3')">
+              <div class="idx">3</div>
+              <div class="t">
+                <b>Adaptive Grouped Speculative Decoding（自适应分组投机解码）</b>
+                <div class="sub">算法：自适应草稿长度（T_SD + MBA）；实现：DGDS + 压缩后缀树提供免费草稿</div>
+              </div>
+              <div class="chev">▼</div>
+            </div>
+            <div class="tech-body"><div class="tech-body-inner">
+              <p><b>它要解决什么</b>：长尾阶段并发极低、算力大量闲置，投机解码正好能用<b>并行验证</b>把闲置算力换成加速。但要在 RL rollout 里真正落地，有两个拦路问题，也正好对应下面两块：</p>
+              <ul>
+                <li><b>草稿长度多长才划算？</b> rollout 的 batch 从数百剧烈波动到个位数，固定草稿长度必然顾此失彼——需要一套<b>自适应草稿长度</b>的算法（下方「一、概念与算法」）。</li>
+                <li><b>草稿从哪来？</b> 传统 draft 模型在 target 每轮更新下会<b>漂移</b>、接受率崩塌——需要一个<b>天然与 target 同步、免独立模型</b>的草稿来源（下方「二、实现」）。</li>
+              </ul>
+
+              <h4 style="margin:1.6rem 0 .4rem;padding-top:1rem;border-top:2px solid var(--line);font-size:1.04rem">一、概念与算法：自适应草稿长度</h4>
+              <p>自适应草稿长度分两步：<b>第一步</b>用吞吐模型 <span class="katex-inline">\(T_{SD}\)</span> 定「<b>总量</b>」（当前 batch 该发多少草稿 token），<b>第二步</b>用 MBA 把总量「<b>切</b>」给不同优先级的请求。</p>
+              <p><b>第一步：多长才划算</b>。SD 的收益强依赖 batch size：<b>batch 小、算力闲</b> → 草稿越长、并行验证越赚；<b>batch 大、target 已 compute-bound</b> → 长草稿的验证开销反而拖慢，甚至负收益。要量化这个权衡、找到最优长度，需要一个吞吐模型 <span class="katex-inline">\(T_{SD}(B,\gamma)\)</span>：</p>
+              <details class="ex">
+                <summary><span class="katex-inline">\(T_{SD}\)</span> 吞吐模型（推导「最优草稿长度随 batch 变化」）</summary>
+                <div class="exbody">
+                  <p><b>符号</b>（都是「每一步 SD」里的量：draft 先猜 <span class="katex-inline">\(\gamma\)</span> 个草稿 token → target <b>一次并行验证</b>）：<span class="katex-inline">\(\alpha=E(\beta)\)</span> 平均接受率（<span class="katex-inline">\(\beta\)</span> 是逐位置接受概率），<span class="katex-inline">\(\gamma\)</span> 每步草稿数，<span class="katex-inline">\(B\)</span> 当前 batch size，<span class="katex-inline">\(D(B,\gamma)\)</span>/<span class="katex-inline">\(T(B,\gamma)\)</span> 分别是 draft/target 的一次 forward 时间；参照物 <span class="katex-inline">\(T(B,1)\)</span> 是不用 SD 时 target 每 token 的耗时。</p>
+                  <p><b>① 一步平均产出几个 token</b></p>
+                  $$ E[\text{tokens per forward}] = \frac{1-\alpha^{\gamma+1}}{1-\alpha} $$
+                  <p>推导：验证是<b>从前往后逐个判定、一旦被拒就停</b>（后面全作废）。所以「前 <span class="katex-inline">\(k\)</span> 个草稿都被接受」的概率 <span class="katex-inline">\(\approx\alpha^{k}\)</span>，接受数的期望按尾概率累加 <span class="katex-inline">\(=\alpha+\alpha^{2}+\dots+\alpha^{\gamma}\)</span>。再加上一个<b>白送的 bonus token</b>——哪怕草稿全不中，target 验证时顺带算出的那个纠正 token 也是真 token，所以每步产出 <b>= 接受数 + 1</b>：</p>
+                  $$ 1+\alpha+\alpha^{2}+\cdots+\alpha^{\gamma}=\frac{1-\alpha^{\gamma+1}}{1-\alpha}\quad(\text{等比数列求和}) $$
+                  <p class="muted" style="font-size:.86rem">直觉检查：<span class="katex-inline">\(\alpha\to1\)</span>（草稿几乎全中）→ 极限为 <span class="katex-inline">\(\gamma+1\)</span>（全中，一步产出 γ+1 个）；<span class="katex-inline">\(\alpha\to0\)</span>（基本不中）→ 值为 1（退化成普通解码，只剩那个 bonus token）。</p>
+                  <p><b>② 平均「每个 token」花多少时间</b>：一步总耗时 <span class="katex-inline">\(D(B,\gamma)+T(B,\gamma)\)</span> ÷ 一步产出，就是</p>
+                  $$ T_{SD} = \frac{(1-\alpha)\bigl(D(B,\gamma)+T(B,\gamma)\bigr)}{1-\alpha^{\gamma+1}} $$
+                  <p><span class="katex-inline">\(T_{SD}\)</span> 越小 = 出每 token 越快。只有当 <span class="katex-inline">\(T_{SD} < T(B,1)\)</span>（比不用 SD 更快）时，SD 才真正有收益。</p>
+                  <p><b>③ 为什么最优 <span class="katex-inline">\(\gamma\)</span> 会随 batch 变化</b>（本节重点）。盯住 <span class="katex-inline">\(T_{SD}\)</span>，看 <span class="katex-inline">\(\gamma\)</span> 变大时分子分母的拉扯：</p>
+                  <ul>
+                    <li><b>分母</b> <span class="katex-inline">\(1-\alpha^{\gamma+1}\)</span>：<span class="katex-inline">\(\gamma\)</span> 大 → 分母大 → <span class="katex-inline">\(T_{SD}\)</span> 小（<b>好</b>）。但<b>边际递减</b>——<span class="katex-inline">\(\alpha^{\gamma+1}\)</span> 本就小，再猜更多也压不下去多少。</li>
+                    <li><b>分子</b> <span class="katex-inline">\(D+T\)</span>：<span class="katex-inline">\(\gamma\)</span> 大 → 猜更多、验更多 → 变大（<b>坏</b>）。</li>
+                  </ul>
+                  <p>谁占上风由 <span class="katex-inline">\(B\)</span> 决定：</p>
+                  <ul>
+                    <li><b><span class="katex-inline">\(B\)</span> 小</b>（长尾，甚至 <span class="katex-inline">\(B=1\)</span>）：算力闲、target 处于 <b>memory-bound</b>，验证 <span class="katex-inline">\(\gamma\)</span> 个和验证 1 个几乎一样快 → <span class="katex-inline">\(T(B,\gamma)\approx T(B,1)\)</span>，分子几乎不随 <span class="katex-inline">\(\gamma\)</span> 涨；draft 也便宜。于是<b>分子不动、分母还能变大 → <span class="katex-inline">\(\gamma\)</span> 越大越赚</b>，该放长草稿。</li>
+                    <li><b><span class="katex-inline">\(B\)</span> 大</b>（早期，上百）：算力已喂满、target 变 <b>compute-bound</b>，<span class="katex-inline">\(T(B,\gamma)\)</span> 随 <span class="katex-inline">\(\gamma\)</span> <b>快速上升</b>，<span class="katex-inline">\(D(B,\gamma)\)</span> 也不可忽略 → 分子涨得比分母快，<span class="katex-inline">\(\gamma\)</span> 稍大 <span class="katex-inline">\(T_{SD}\)</span> 就反弹，长草稿反而<b>负收益</b>。此时最优 <span class="katex-inline">\(\gamma\)</span> 很小甚至该关掉 SD。</li>
+                  </ul>
+                  <p>因为 rollout 里 <span class="katex-inline">\(B\)</span> 从上百一路滑到 1，<b>同一个固定 <span class="katex-inline">\(\gamma\)</span> 不可能两头都最优</b>（早期该小、长尾该大）——所以最优草稿长度必须随 <span class="katex-inline">\(B\)</span> 在线重算，这正是 Algorithm 1 第一步 <span class="katex-inline">\(\gamma^{*}=\arg\min_{\gamma} T_{SD}(B,\gamma)\)</span>：用当前实测的 <span class="katex-inline">\(B,\alpha\)</span> 在这条曲线上挑使每 token 时间最小的 <span class="katex-inline">\(\gamma\)</span>。</p>
+                  <p><b>④ 哪些量离线、哪些量在线</b>（论文说的「离线 profile 的 <span class="katex-inline">\(T_{SD}\)</span> 模型」到底指什么）：<span class="katex-inline">\(T_{SD}\)</span> 里的量分两半——</p>
+                  <ul>
+                    <li><b>离线 profile（跑 RL 前测一次、反复用）</b>：前向延迟 <span class="katex-inline">\(D(B,\gamma)\)</span>/<span class="katex-inline">\(T(B,\gamma)\)</span>——即「这台硬件上 draft/target 模型，给定 batch <span class="katex-inline">\(B\)</span>、草稿长度 <span class="katex-inline">\(\gamma\)</span>，跑一次要多少毫秒」。做法是预先在目标硬件上把 <span class="katex-inline">\((B,\gamma)\)</span> 的常见组合各测一遍，存成查找表/拟合曲线。它<b>只取决于硬件 + 模型结构 + <span class="katex-inline">\((B,\gamma)\)</span> 形状</b>，整个训练过程稳定不变，所以能离线、测一次即可。「离线 profile 的 <span class="katex-inline">\(T_{SD}\)</span> 模型」指的就是这两条延迟函数。</li>
+                    <li><b>在线采集（每次调用现读）</b>：接受率 <span class="katex-inline">\(\alpha\)</span> 与 batch size <span class="katex-inline">\(B\)</span>。<span class="katex-inline">\(\alpha\)</span> 随当前策略权重（每轮更新）、题目难度、CST 上下文漂移，<span class="katex-inline">\(B\)</span> 时刻波动——都没法预先测。</li>
+                  </ul>
+                  <p class="muted" style="font-size:.86rem">所以 MBA 第一步是「拼装」：在线补上 <span class="katex-inline">\(\alpha,B\)</span> 后，<span class="katex-inline">\(T_{SD}\)</span> 只剩 <span class="katex-inline">\(\gamma\)</span> 一个自由变量（<span class="katex-inline">\(D,T\)</span> 从离线表按 <span class="katex-inline">\(B,\gamma\)</span> 查），在 <span class="katex-inline">\(\gamma=1\dots\gamma_{max}\)</span> 扫一遍取最小即得 <span class="katex-inline">\(\gamma^{*}\)</span>。</p>
+                </div>
+              </details>
+              <p><b>第二步：总量怎么切给谁（边际收益感知 MBA, Algorithm 1）</b>。第一步的 <span class="katex-inline">\(T_{SD}\)</span> 只给出一个标量——总预算 <span class="katex-inline">\(\Gamma^{*}=\gamma^{*}\cdot B\)</span>，且推导时把所有请求当同质、平摊 <span class="katex-inline">\(\gamma^{*}\)</span>。但现实里请求分两类、并不平等：</p>
+              <ul>
+                <li><b>高优 = 探针请求</b>：每组那个「先跑、用来估长度」的请求。它早跑完 → 整组长度信息早暴露 → <a href="#t2" style="color:var(--accent)">上下文调度</a>更准 → 整个 rollout 长尾更短。<b>加速探针有系统级的「杠杆效应」</b>。</li>
+                <li><b>低优 = 其余普通请求</b>：加速它们只是让自己快一点，没有额外的系统收益。</li>
+              </ul>
+              <p>所以问题升级为「<b>这 <span class="katex-inline">\(\Gamma^{*}\)</span> 该多分给高优、还是低优</b>」——MBA 就是这个在线分配算法（下面伪代码把核心思想与代码逐行对上）：</p>
+              <details class="ex">
+                <summary>Algorithm 1：Marginal-Benefit-Aware Adaptive Speculation（伪代码）</summary>
+                <div class="exbody">
+                  <p>「边际收益」= 给某优先级<b>再加一个草稿 token</b> 带来的期望增益：</p>
+                  $$ \text{benefit}_h = B_h\cdot(\beta[\gamma_h]-\beta[\gamma_h{+}1]),\quad \text{benefit}_l = B_l\cdot(\beta[\gamma_l]-\beta[\gamma_l{+}1]) $$
+                  <p>逐项拆解，为什么长这样：</p>
+                  <ul>
+                    <li><b>为什么用相邻差 <span class="katex-inline">\(\beta[\gamma]-\beta[\gamma{+}1]\)</span>，而不是 <span class="katex-inline">\(\beta\)</span> 本身</b>：贪心分配比的是「下一块预算花在哪更值」，看的是<b>再加一格带来的增量</b>，所以取差分。又因 <span class="katex-inline">\(\beta\)</span> 逐位置递减（越靠后的草稿越难连续命中），这个差分随 <span class="katex-inline">\(\gamma\)</span> 变大而变小——典型的<b>边际递减</b>：第 1 个草稿很值，第 8 个没多少油水。</li>
+                    <li><b>为什么乘 batch size <span class="katex-inline">\(B_h\)</span></b>：一个草稿位置的决定会<b>同时施加到这一拨所有请求</b>上，所以收益按人数放大。</li>
+                  </ul>
+                  <p>三个核心思想与代码的对应（右侧注释标出）：</p>
+                  <pre># 思想① 定预算：由吞吐模型 T_SD 求当前 batch 的最优总草稿预算
+γ* ← argmin_γ T_SD(B, γ);   Γ* ← γ* · B
+if Γ* < B_h: return (0, 0)              # 连高优保底都不够 → 关闭投机
+
+# 思想② 高优保底：每个高优请求先发 1 个草稿 token
+γ_h ← 1, γ_l ← 0
+
+# 思想③ 贪心分配剩余预算：每轮喂给「边际收益更高」的一方
+while 还有预算:
+    if benefit_h > λ · benefit_l:  γ_h += 1   # λ≥1 偏向高优（探针）
+    else:                          γ_l += 1
+    受 γ_max 上限与剩余预算约束；两边都不能再加则停
+return (γ_h, γ_l)</pre>
+                  <p><b><span class="katex-inline">\(\lambda\)</span> 到底在调什么</b>（最容易懵的一格）：判据不是 <span class="katex-inline">\(\text{benefit}_h > \text{benefit}_l\)</span>，而是 <span class="katex-inline">\(\text{benefit}_h > \lambda\cdot\text{benefit}_l\)</span>——低优要「打折扣、过更高门槛」才拿得到预算。<span class="katex-inline">\(\lambda=1\)</span> 时纯按收益大小分（不偏袒、纯吞吐最优）；<span class="katex-inline">\(\lambda=2\)</span>（实验值）则给高优 2 倍优待。<b>为什么偏袒高优</b>：探针的杠杆效应（早暴露长度 → 长尾更短）是<b>系统级收益，没被写进 benefit 公式</b>（公式只算了自己这拨的 token 产出）——<span class="katex-inline">\(\lambda\)</span> 就是那个旋钮，把这份收益<b>人为补回来</b>，量化「愿意牺牲多少纯吞吐去换探针延迟下降」。</p>
+                  <p class="muted" style="font-size:.86rem">为何一定收敛：<span class="katex-inline">\(\beta\)</span> 逐位置递减 ⇒ 两边 benefit 随自己已分到的量单调下降，每投一个就扣掉对应预算——「把下一格投给当前收益更高的一方」会让两边边际收益趋于拉平（预算约束下的水填充最优），长草稿只在真正划算时才拿得到。<span class="katex-inline">\(\lambda\in[1,\infty)\)</span> 与判据均按论文原式转写。</p>
+                </div>
+              </details>
+              <p class="muted" style="font-size:.9rem"><b>两点补充</b>：① MBA <b>周期性调用</b>（请求特征在短时间窗内相对稳定），每次现读 <span class="katex-inline">\(\alpha,B\)</span> 重算一遍。② 长尾阶段并发极低 → 单请求分到的草稿自然变长，并叠加<b>多路（multi-path）投机</b>：单路沿用 SuffixDecoding 的置信度打分过滤低概率候选，多路则用 beam-search 返回多个候选路径。此时组内已完成请求越多、CST 上下文越丰富，长尾请求接受长度越高（见表 2 的 scaling）。</p>
+              <h4 style="margin:2rem 0 .4rem;padding-top:1rem;border-top:2px solid var(--line);font-size:1.04rem">二、实现：DGDS 分布式草稿服务器</h4>
+              <p><b>草稿从哪来</b>：Seer 部署 <b>DGDS（Distributed Grouped Draft Server，分布式分组草稿服务器）</b>，为每个组维护一棵<b>压缩后缀树（CST）</b>，聚合该组所有请求生成的 token 序列。CST 就是一个高精度、动态、且天然与 target 同步的「draft model」——因为草稿来自当前策略自己生成的同组回答，不存在漂移。相比要匹配整个输入序列的朴素 n-gram，CST 能以<b>低复杂度</b>给出草稿 token。</p>
+              <p>DGDS 采用 <b>master-worker 分布式架构</b>，四步运转（把「更新 CST」从模型执行的关键路径上剥离、异步进行，这是它相比传统后缀树方法降低 draft 时延的关键）：</p>
+              <div class="flow">
+                <div class="step"><div class="sn">1</div><div class="sc"><b>Asynchronous Append</b>：每个推理实例把新生成的 token 按 group_id 批量发给 DGDS（攒够一批再发，降低通信开销，对草稿质量影响可忽略）。<code>update_cst</code></div></div>
+                <div class="step"><div class="sn">2</div><div class="sc"><b>Global Aggregation</b>：DGDS（master）聚合同组各请求的更新；按 request_id 隔离，把每个新 token 只映射到 CST 里对应的局部路径，防止跨请求干扰。</div></div>
+                <div class="step"><div class="sn">3</div><div class="sc"><b>Periodic Fetch</b>：每个实例内嵌一个 draft client（worker），先 <code>register_group</code> 注册活跃组，再定期 <code>fetch_cst</code> 增量同步最新 CST；只拉取本实例正在处理的组。</div></div>
+                <div class="step"><div class="sn">4</div><div class="sc"><b>Local Speculation</b>：实例基于本地 CST 做投机——因为 CST 聚合了全组所有请求的路径，各实例共享统计信息，草稿质量更高。<code>batch_speculate</code> 采用<b>零拷贝</b>：直接读写推理引擎的显存 buffer。</div></div>
+              </div>
+              <figure style="margin:1.2rem 0 0">
+                <div class="fig-frame">
+                  <img src="imgs/cropped_page6_idx8.jpg" alt="Distributed Grouped Draft Server 架构" loading="lazy">
+                </div>
+                <div class="fig-cap"><span class="fnum">图 6</span>：分布式分组草稿服务器（DGDS）。
+                  <span class="fig-toggle" onclick="toggleFigDetail(this)">展开说明 ▸</span>
+                  <div class="figure-detail">
+                    <ul>
+                      <li><b>中心 server</b>：维护每个组的 CST，接收各实例异步 append 的 token，按 request_id 隔离聚合。</li>
+                      <li><b>各实例的 draft client</b>：定期增量 fetch 本实例相关组的 CST，本地做投机，不走中心节点的关键路径，降低延迟。</li>
+                      <li><b>多 server 部署</b>：按 group 哈希路由，避免通信和存储热点。</li>
+                      <li><b>数据流</b>：token 上行（append）→ 中心聚合成 CST → CST 下行（fetch）→ 本地投机。上下行都做批处理/增量以省带宽。</li>
+                    </ul>
+                    <div class="sumup">一句话：把「组内所有回答」汇聚成一棵共享后缀树，让每个实例都能用上全组的模式统计来猜下一段 token。</div>
+                  </div>
+                </div>
+              </figure>
+            </div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="eval">
+        <div class="kicker">实验结论</div>
+        <h2>效果：吞吐翻倍，长尾几乎消失</h2>
+        <p class="lead">测试床共 <strong>32 个节点 × 8 张 H800</strong>；用 GRPO 跑三个不同规模的模型，各自使用 <strong>32 / 128 / 256</strong> 张 GPU（Moonlight 32GB / Qwen2-VL-72B 146GB / Kimi-K2 1TB）。为排除干扰，所有系统（含 Seer）都跑在<strong>同一套 in-house vLLM 推理引擎</strong>上；Seer 在算法逻辑上与同步 veRL <strong>完全一致</strong>，训练结果相同，只优化 rollout 性能。</p>
+        <p>对比的三类 baseline 覆盖了同步调度、长尾缓解、投机解码三个方向：</p>
+        <div class="two-col" style="grid-template-columns:1fr 1fr 1fr">
+          <div class="cbox"><h4 style="font-size:.98rem">veRL</h4><p style="font-size:.9rem">SOTA 同步 RL 系统，工程高度优化的 round-robin 调度，作为主 baseline 衡量端到端提升。</p></div>
+          <div class="cbox"><h4 style="font-size:.98rem">StreamRL-Oracle</h4><p style="font-size:.9rem">把 StreamRL 的 Skewness-Aware 分桶调度移植过来，且喂<b>真实长度</b>（上界最优）。但它仍把请求组当不可抢占的原子单元；遇到 OOD 负载（Kimi-K2）甚至<b>不如</b>朴素 veRL。</p></div>
+          <div class="cbox"><h4 style="font-size:.98rem">Vanilla SD</h4><p style="font-size:.9rem">按模型族分别配强投机解码 baseline：Moonlight 用 SuffixDecoding，Qwen 用 Qwen2-7B-VL draft 模型，Kimi-K2 用 MTP，且集成进 veRL 与 StreamRL-Oracle。</p></div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="data">
+            <thead><tr><th>工作负载特征</th><th>Moonlight</th><th>Qwen2-VL-72B</th><th>Kimi-K2</th></tr></thead>
+            <tbody>
+              <tr><td>模型规模</td><td>32 GB</td><td>146 GB</td><td>1 TB</td></tr>
+              <tr><td>GPU 总数 / 每实例</td><td>32 / 1</td><td>128 / 8</td><td>256 / 32</td></tr>
+              <tr><td>每迭代请求数</td><td>3,200</td><td>9,600</td><td>6,400</td></tr>
+              <tr><td>组大小 (n)</td><td>8</td><td>16</td><td>8</td></tr>
+              <tr><td>温度</td><td>1.0</td><td>0.8</td><td>1.0</td></tr>
+              <tr><td>最大生成长度</td><td>65,536</td><td>40,960</td><td class="hi">98,304</td></tr>
+              <tr><td>平均生成长度</td><td>22,386</td><td>7,615</td><td>38,959</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:.88rem;margin-top:-.6rem">表 3：三个 RL 任务的模型配置与负载特征。页面多处提到的「9.8 万 token」正是 Kimi-K2 的 98,304 上限；每迭代请求数 = prompt 数 × 组大小。</p>
+
+        <div class="metrics" style="grid-template-columns:repeat(4,1fr);margin:1.4rem 0">
+          <div class="metric"><div class="num">44–104<small>%</small></div><div class="lbl">端到端 rollout 吞吐提升（对 veRL，最高 2.04×）</div></div>
+          <div class="metric"><div class="num">72–94<small>%</small></div><div class="lbl">长尾延迟下降</div></div>
+          <div class="metric"><div class="num">96<small>%</small></div><div class="lbl">上下文调度达到 Oracle 调度器的吞吐</div></div>
+          <div class="metric"><div class="num">+43<small>%</small></div><div class="lbl">对比非严格同步的 Partial Rollout</div></div>
+        </div>
+
+        <h3>端到端结果</h3>
+        <p>先看最直接的三任务对比：rollout 吞吐（图 7）与长尾延迟（图 8）。Seer 在三个任务、两种组大小（8 / 16）下都全面胜出，对 veRL 提升 <strong>44–104%</strong>，也优于 StreamRL-Oracle 与各种 vanilla SD。显存受限任务（Moonlight、Qwen2-VL-72B）收益最大；组越大 veRL 的组级调度失衡越严重、吞吐越掉，而 Seer 反而更稳。</p>
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page9_idx9.jpg" alt="Moonlight 吞吐对比" loading="lazy">
+            <img src="imgs/cropped_page9_idx10.jpg" alt="Qwen2-VL-72B 吞吐对比" loading="lazy" style="margin-top:.7rem">
+            <img src="imgs/cropped_page9_idx11.jpg" alt="Kimi-K2 吞吐对比" loading="lazy" style="margin-top:.7rem">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 7</span>：三个任务 (a) Moonlight / (b) Qwen2-VL-72B / (c) Kimi-K2 在组大小 8 与 16 下的端到端 rollout 吞吐。每组柱状对比 veRL、StreamRL-Oracle、各 SD baseline 与 Seer；Seer 全面领先。注意 Kimi-K2（OOD 负载）上 StreamRL-Oracle 甚至低于 veRL。</div>
+        </figure>
+        <figure>
+          <div class="fig-frame"><img src="imgs/cropped_page9_idx12.jpg" alt="长尾延迟与总时间对比" loading="lazy"></div>
+          <div class="fig-cap"><span class="fnum">图 8</span>：三个任务的长尾时间（tail time）与总时间。长尾定义为最后 10% 完成的请求所独占的时长。对 Moonlight、Qwen2-VL-72B 这类显存受限任务，<strong>最后 10% 的请求最多吃掉总时间的 50%</strong>；Seer 把长尾压缩了 <strong>72–94%</strong>。</div>
+        </figure>
+
+        <h3>长尾到底有多严重</h3>
+        <p>作者用 Qwen2-VL-72B 在 veRL 上的一次迭代给出量化证据：一轮 rollout 里发生 <strong>13,686 次抢占</strong>；最后 5% 完成的请求，长度落在前 15 百分位，但平均<strong>开始执行的时刻已在总时间的 42%</strong>——长请求被一路往后拖。实例间失衡更夸张：最早与最晚实例的完成时间差占总时间的 <strong>70%</strong>，每个实例平均空转 <strong>1,580 秒</strong>（约总时间的 37%）。这就是长尾的根源。</p>
+
+        <h3>逐项拆解贡献</h3>
+        <p>把三个技术依次叠加，看每一层各贡献多少（数字为相对 baseline 的吞吐倍数，各取第 5 个 rollout 迭代）：</p>
+        <div class="tbl-wrap">
+          <table class="data">
+            <thead><tr><th>方法（累加）</th><th>Moonlight</th><th>Qwen2-VL-72B</th><th>Kimi-K2</th></tr></thead>
+            <tbody>
+              <tr><td>Baseline (veRL)</td><td>1.00</td><td>1.00</td><td>1.00</td></tr>
+              <tr><td>+ Divided Rollout</td><td>1.41×</td><td>1.42×</td><td>1.16×</td></tr>
+              <tr><td>+ Context Scheduling</td><td>1.47×</td><td>1.56×</td><td>1.27×</td></tr>
+              <tr><td>+ Grouped SD</td><td class="hi">1.90×</td><td class="hi">2.04×</td><td class="hi">1.53×</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:.88rem;margin-top:-.6rem">表 4：性能提升拆解。拆分 rollout 最多贡献 +42%；上下文调度再 +14%；分组投机解码在调度基础上再 +26~48%。三者协同缺一不可，Qwen2-VL-72B 上叠满到 2.04×。</p>
+
+        <p>吞吐提升从何而来？把 Seer 运行时的显存曲线（图 9）和前面 baseline 的图 3(a) 对照，就是「问题—解法」的完整闭环：baseline 前期抢占、后期利用率跌落；Seer 全程满载，长尾被压短——这正是表 4 中「Divided Rollout + Context Scheduling」两层贡献的来源。</p>
+        <figure>
+          <div class="fig-frame"><img src="imgs/cropped_page9_idx13.jpg" alt="Seer 运行时的 KVCache 利用率与运行请求数" loading="lazy"></div>
+          <div class="fig-cap"><span class="fnum">图 9</span>：Seer 在 Qwen2-VL-72B 一次 rollout 迭代中的 KVCache 利用率与平均运行请求数。全程维持高显存利用率，长尾阶段（曲线尾部）明显短于 baseline（图 3a）。</div>
+        </figure>
+
+        <h3>延伸研究</h3>
+        <p class="muted" style="margin-top:0;font-size:.92rem">三个延伸实验分别拷问：长度信号对调度到底值多少（§4.4.1）、Seer 的投机解码相比 vanilla SD 强在哪（§4.4.2），以及和放弃严格同步的 Partial Rollout 比会怎样（§4.4.3）。</p>
+
+        <h4 style="margin:1.6rem 0 .4rem;font-size:1.04rem">研究一：长度上下文对调度有多重要</h4>
+        <p>对比四档配置：<b>Baseline</b>、<b>No-Context</b>（只做 divided rollout、不用长度信号）、<b>Context-Aware（即 Seer）</b>（完整上下文调度）、<b>Oracle</b>（提前知道所有真实长度、跑 LFS 的理论上界）。结论：只有 divided rollout 时长尾仅降 <strong>21%</strong>；加上下文调度后长尾<strong>降 89%</strong>、吞吐达到 Oracle 的 <strong>96%</strong>。说明「探针估长度 + 近似 LFS」这套在线学习才是长尾问题的真正解药。</p>
+        <figure>
+          <div class="fig-frame">
+            <img src="imgs/cropped_page10_idx14.jpg" alt="归一化吞吐：Baseline / No-Context / Context-Aware / Oracle" loading="lazy">
+            <img src="imgs/cropped_page10_idx15.jpg" alt="归一化长尾延迟：Baseline / No-Context / Context-Aware / Oracle" loading="lazy" style="margin-top:.7rem">
+          </div>
+          <div class="fig-cap"><span class="fnum">图 10</span>：长度上下文对 (a) 归一化吞吐（上）与 (b) 归一化长尾延迟（下）的影响。四档柱状：Baseline / No-Context / Context-Aware（即 Seer）/ Oracle。Seer 长尾降到 baseline 的约 0.11×（−89%），吞吐逼近 Oracle（96%）。</div>
+        </figure>
+
+        <h4 style="margin:2rem 0 .4rem;font-size:1.04rem">研究二：分组投机解码 vs. vanilla SD</h4>
+        <p>在 veRL 上跑一次迭代，对每个模型族对比 <b>No SD / Vanilla SD / Seer 的分组 SD</b>（图 11，柱高为归一化吞吐，柱上标注平均接受长度 <span class="katex-inline">\(\tau\)</span>）。Seer 的自适应分组 SD 在三个任务上都胜过 vanilla SD，最高 <strong>1.3×</strong>；靠组上下文，平均接受长度比纯 CST 方法（SuffixDecoding）<strong>高 0.22</strong>，也超过 MTP。有意思的反例：用小 draft 模型的 vanilla SD 虽然 <span class="katex-inline">\(\tau\)</span> 略高（Qwen 上 2.19 vs 2.15），但 draft 模型开销太大，反而<strong>总吞吐最低</strong>——印证了「高 <span class="katex-inline">\(\tau\)</span> ≠ 高吞吐，draft 开销才是关键」。</p>
+        <figure>
+          <div class="fig-frame"><img src="imgs/cropped_page10_idx16.jpg" alt="三个任务下不同 SD 策略的归一化吞吐与平均接受长度" loading="lazy"></div>
+          <div class="fig-cap"><span class="fnum">图 11</span>：三个任务（Moonlight / Qwen2-VL-72B / Kimi-K2）下 No SD、Vanilla SD、Seer 分组 SD 的归一化吞吐，柱上 <span class="katex-inline">\(\tau\)</span> 为平均接受长度。Seer 在吞吐上全面领先；Qwen 上 vanilla SD 的 draft 模型 <span class="katex-inline">\(\tau\)</span> 更高但吞吐反而垫底。</div>
+        </figure>
+
+        <h4 style="margin:2rem 0 .4rem;font-size:1.04rem">研究三：对比 Partial Rollout（非严格同步）</h4>
+        <p>Partial Rollout 是流行的<b>非严格同步</b>方案：超发请求、跑完预定数量就结束 rollout，剩下的长尾挪到下一轮高优先跑。按 APRIL 的设置<b>超发 2 倍</b>请求，在 Qwen2-VL-72B 上对比——Seer 平均吞吐<strong>高 43%</strong>。原因有二：其一，显存受限的 long-CoT 场景里，翻倍的请求量反而加剧抢占，吃不下它名义上的高并发；其二，Seer 的分组投机解码进一步加速了长生成。更重要的是<b>训练质量</b>：图 12(b) 显示 Partial Rollout 生成的<strong>长输出占比明显偏低</strong>——它系统性地漏掉了长尾样本，这种分布偏移可能损害 RL 训练效果。</p>
+        <div class="two-col">
+          <figure style="margin:1rem 0">
+            <div class="fig-frame"><img src="imgs/cropped_page10_idx17.jpg" alt="Seer 与 Partial Rollout 的 rollout 吞吐对比" loading="lazy"></div>
+            <div class="fig-cap"><span class="fnum">图 12(a)</span>：Qwen2-VL-72B 上 Seer 与 Partial Rollout 的逐迭代 rollout 吞吐。Seer 稳定高出约 43%。</div>
+          </figure>
+          <figure style="margin:1rem 0">
+            <div class="fig-frame"><img src="imgs/cropped_page10_idx18.jpg" alt="同步方法与 Partial Rollout 的输出长度分布对比" loading="lazy"></div>
+            <div class="fig-cap"><span class="fnum">图 12(b)</span>：输出长度分布对比。同步方法（Seer）保持均衡，Partial Rollout 明显偏向短输出、长尾请求占比被压低——分布偏移的直接证据。</div>
+          </figure>
+        </div>
+      </section>
+
+      <section id="takeaway">
+        <div class="kicker">一句话总结</div>
+        <h2>为什么这篇值得读</h2>
+        <p class="lead">Seer 的聪明之处不在于发明新算法，而在于<strong>发现了一个一直摆在眼前的免费信号</strong>：GRPO「一个 prompt 采一组回答」的结构，让同组回答在长度和模式上高度相似。把这个信号在线学出来，就能同时解决调度（长度）和生成加速（模式）两个问题——而且全程严格 on-policy，不拿算法精度换性能。</p>
+        <div class="insight">
+          <div class="tag">适用与边界</div>
+          <p style="margin:.4rem 0 0">如果你在做<strong>同步 / on-policy 的 GRPO 类 RL 训练</strong>、且被 rollout 长尾和显存抢占折磨，Seer 的三招值得借鉴。作者也指出这些技术可以适配到异步场景。反之，如果你已经全面拥抱异步、不在乎 off-policy 带来的分布偏移，那长尾问题的动机就没那么强。</p>
+        </div>
+      </section>
+    </article>
+
+    <aside class="toc" aria-label="目录">
+      <b>目录</b>
+      <a href="#tldr">TL;DR</a>
+      <a href="#problem">rollout 为何是瓶颈</a>
+      <a href="#insight">核心洞察：组内相似性</a>
+      <a href="#design">Seer 三个技术</a>
+      <a href="#eval">实验结论</a>
+      <a href="#takeaway">一句话总结</a>
+    </aside>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <p><strong>原文</strong>：Seer: Online Context Learning for Fast Synchronous LLM Reinforcement Learning · Qin et al., Moonshot AI &amp; 清华大学 · arXiv:2511.14617（2025.11）</p>
+      <p><a href="https://arxiv.org/abs/2511.14617" target="_blank" rel="noopener">arXiv 摘要页 ↗</a> · <a href="https://arxiv.org/pdf/2511.14617" target="_blank" rel="noopener">PDF ↗</a></p>
+      <p class="muted">本页为中文可视化阅读，图片截取自论文 PDF（v3），数字与结论以原文为准。</p>
+    </div>
+  </footer>
+
+  <script>
+    function toggleFigDetail(el) {
+      var d = el.nextElementSibling;
+      var open = d.classList.toggle('active');
+      el.textContent = open ? '收起 ▴' : '展开说明 ▸';
+    }
+    function toggleTech(id) {
+      document.getElementById(id).classList.toggle('open');
+    }
+    document.querySelectorAll('.tech').forEach(function(t, i) {
+      if (i === 0) t.classList.add('open');
+    });
+  </script>
+</body>
+</html>
