@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: finding-your-unknowns
+    title: 'Agent 做得越多，越要先找到自己的未知项'
+    date: 2026-07-12
+    source_type: blog
+    source_url: 'https://x.com/trq212/status/2073100352921215386'
   - slug: ai-efficiency-gain-illusion
     title: '简单任务用 AI 为什么越用越多却没省时间'
     date: 2026-07-12
