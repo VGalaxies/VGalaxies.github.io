@@ -1,0 +1,1282 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Claude Code 团队《Getting started with loops》中文可视化阅读笔记：理解 turn-based、goal-based、time-based 与 proactive loops，以及质量和 token 护栏。">
+  <title>Loop 不是让 Agent 一直跑</title>
+  <style>
+    :root {
+      --canvas: oklch(96.7% 0.019 77);
+      --paper: oklch(98.5% 0.011 77);
+      --paper-2: oklch(93.5% 0.030 74);
+      --paper-3: oklch(89.6% 0.043 69);
+      --ink: oklch(23.8% 0.024 50);
+      --ink-soft: oklch(38% 0.027 51);
+      --muted: oklch(52% 0.021 54);
+      --line: oklch(82.8% 0.039 69);
+      --accent: oklch(50% 0.105 42);
+      --accent-dark: oklch(40% 0.099 41);
+      --accent-soft: oklch(91% 0.051 61);
+      --shadow: 0 1px 3px rgba(65, 43, 22, .10), 0 16px 42px rgba(65, 43, 22, .065);
+      --r-xs: 4px;
+      --r-sm: 8px;
+      --r-md: 14px;
+      --r-lg: 24px;
+      --r-pill: 999px;
+      --max: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: "Avenir Next", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.76;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body, button, summary, a { touch-action: manipulation; }
+    p { margin: 0 0 1rem; text-wrap: pretty; }
+    a {
+      color: var(--accent-dark);
+      text-decoration-thickness: 1px;
+      text-underline-offset: .18em;
+    }
+    strong { font-weight: 760; }
+    code, pre, .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+    }
+    code {
+      padding: .08em .32em;
+      background: var(--paper-2);
+      border-radius: var(--r-xs);
+      font-size: .9em;
+    }
+    button, summary { font: inherit; }
+    button:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--accent) 34%, transparent);
+      outline-offset: 3px;
+    }
+
+    .skip-link {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      z-index: 80;
+      padding: .65rem .85rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      transform: translateY(-180%);
+      transition: transform 160ms cubic-bezier(.16,1,.3,1);
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: color-mix(in oklch, var(--canvas) 95%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 78%, transparent);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Songti SC", "STSong", serif;
+      font-size: .96rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .top-links { display: flex; align-items: center; gap: .45rem; }
+    .top-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .78rem;
+      color: var(--muted);
+      border-radius: var(--r-pill);
+      font-size: .8rem;
+      text-decoration: none;
+    }
+    .top-link.source { color: var(--paper); background: var(--ink); }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 205px;
+      gap: 4rem;
+      padding: 4.7rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.3rem;
+      align-self: start;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .toc-label {
+      margin: 0 0 .7rem;
+      color: var(--ink-soft);
+      font-size: .68rem;
+      font-weight: 780;
+      letter-spacing: .12em;
+    }
+    .toc a {
+      display: block;
+      min-height: 39px;
+      padding: .5rem .7rem;
+      color: var(--muted);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 68%, transparent);
+      text-decoration: none;
+      line-height: 1.35;
+    }
+    .toc a.active { color: var(--accent-dark); font-weight: 720; }
+
+    h1, h2, h3 {
+      font-family: "Iowan Old Style", "Songti SC", "STSong", serif;
+      text-wrap: balance;
+    }
+    .hero {
+      position: relative;
+      padding: 0 0 4.3rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(300px, .72fr);
+      gap: clamp(2rem, 6vw, 5rem);
+      align-items: center;
+    }
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem 1rem;
+      margin-bottom: 1.25rem;
+      color: var(--accent-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .71rem;
+      font-weight: 760;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 750px;
+      margin: 0 0 1.35rem;
+      font-size: clamp(2.7rem, 6.6vw, 5.8rem);
+      font-weight: 720;
+      letter-spacing: -.035em;
+      line-height: .99;
+    }
+    .hero-deck {
+      max-width: 700px;
+      color: var(--ink-soft);
+      font-size: clamp(1.04rem, 2vw, 1.24rem);
+      line-height: 1.72;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem 1.1rem;
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+
+    .loop-orbit {
+      position: relative;
+      width: min(100%, 380px);
+      aspect-ratio: 1;
+      margin: 0 auto;
+    }
+    .orbit-ring {
+      position: absolute;
+      inset: 16%;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 18px color-mix(in oklch, var(--paper) 45%, transparent);
+    }
+    .orbit-ring::before, .orbit-ring::after {
+      content: "";
+      position: absolute;
+      background: var(--accent);
+    }
+    .orbit-ring::before {
+      width: 34px;
+      height: 2px;
+      right: -2px;
+      top: 42%;
+      transform: rotate(36deg);
+    }
+    .orbit-ring::after {
+      width: 8px;
+      height: 8px;
+      right: 4px;
+      top: 36%;
+      border-radius: 50%;
+    }
+    .orbit-center {
+      position: absolute;
+      inset: 35%;
+      display: grid;
+      place-items: center;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: 50%;
+      box-shadow: var(--shadow);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: clamp(.8rem, 2vw, 1rem);
+      font-weight: 820;
+      letter-spacing: .05em;
+    }
+    .orbit-node {
+      position: absolute;
+      min-width: 108px;
+      padding: .72rem .8rem;
+      background: var(--paper);
+      border-radius: var(--r-sm);
+      box-shadow: 0 1px 3px rgba(65,43,22,.11);
+      text-align: center;
+    }
+    .orbit-node b { display: block; margin-bottom: .12rem; font-size: .85rem; }
+    .orbit-node span { display: block; color: var(--muted); font-size: .67rem; line-height: 1.4; }
+    .orbit-node.trigger { left: 50%; top: 0; transform: translateX(-50%); }
+    .orbit-node.work { right: 0; top: 50%; transform: translateY(-50%); }
+    .orbit-node.verify { left: 50%; bottom: 0; transform: translateX(-50%); }
+    .orbit-node.stop { left: 0; top: 50%; transform: translateY(-50%); }
+
+    .tldr {
+      margin: 3.1rem 0 0;
+      padding: 1.45rem 1.55rem;
+      background: var(--paper);
+      border-radius: var(--r-md);
+      box-shadow: var(--shadow);
+    }
+    .tldr-label {
+      margin-bottom: .8rem;
+      color: var(--accent-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .68rem;
+      font-weight: 820;
+      letter-spacing: .10em;
+    }
+    .tldr-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+    .tldr-item + .tldr-item { border-left: 1px solid var(--line); padding-left: 1.25rem; }
+    .tldr-item b { display: block; margin-bottom: .35rem; font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.07rem; }
+    .tldr-item p { margin: 0; color: var(--ink-soft); font-size: .86rem; line-height: 1.62; }
+
+    section {
+      padding: 5.1rem 0;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 4.5rem;
+    }
+    .section-no {
+      display: inline-block;
+      margin-bottom: .7rem;
+      color: var(--accent-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .68rem;
+      font-weight: 820;
+      letter-spacing: .12em;
+    }
+    h2 {
+      max-width: 790px;
+      margin: 0 0 1.1rem;
+      font-size: clamp(2rem, 4vw, 3.35rem);
+      letter-spacing: -.022em;
+      line-height: 1.12;
+    }
+    h3 { margin: 0 0 .6rem; font-size: 1.27rem; letter-spacing: -.012em; line-height: 1.34; }
+    .lead { max-width: 780px; color: var(--ink-soft); font-size: 1.07rem; }
+
+    .anatomy {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .7rem;
+      margin-top: 2.2rem;
+    }
+    .anatomy-step {
+      position: relative;
+      min-height: 176px;
+      padding: 1rem;
+      background: var(--paper);
+      border-radius: var(--r-sm);
+      box-shadow: 0 1px 3px rgba(65,43,22,.095);
+    }
+    .anatomy-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -.62rem;
+      top: 43%;
+      z-index: 2;
+      color: var(--accent);
+      font-weight: 850;
+    }
+    .anatomy-key {
+      display: block;
+      margin-bottom: 1rem;
+      color: var(--accent-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .68rem;
+      font-weight: 820;
+    }
+    .anatomy-step strong { display: block; margin-bottom: .4rem; }
+    .anatomy-step p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.58; }
+    .loop-test {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 1.2rem;
+      padding: 1.3rem;
+      background: var(--paper-2);
+      border-radius: var(--r-md);
+    }
+    .loop-test strong { display: block; font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.08rem; }
+    .loop-test span { color: var(--muted); font-size: .77rem; }
+    .loop-test .decision {
+      min-width: 84px;
+      color: var(--paper);
+      background: var(--accent-dark);
+      border-radius: var(--r-pill);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .72rem;
+      font-weight: 820;
+      text-align: center;
+      padding: .55rem .75rem;
+    }
+
+    .handoff-map {
+      margin-top: 2.2rem;
+      padding: 1.3rem;
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .handoff-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .55rem;
+      margin-bottom: 1.1rem;
+    }
+    .handoff-tab {
+      min-height: 82px;
+      padding: .75rem .82rem;
+      color: var(--muted);
+      background: var(--paper-2);
+      border: 0;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      text-align: left;
+      transition-property: transform, background-color, color;
+      transition-duration: 170ms;
+    }
+    .handoff-tab:active { transform: scale(.97); }
+    .handoff-tab small {
+      display: block;
+      margin-bottom: .25rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .62rem;
+      opacity: .76;
+    }
+    .handoff-tab span { display: block; font-weight: 760; line-height: 1.35; }
+    .handoff-tab.active { color: var(--paper); background: var(--ink); }
+    .handoff-panel {
+      min-height: 386px;
+      padding: clamp(1.2rem, 3vw, 2rem);
+      background: var(--canvas);
+      border-radius: var(--r-md);
+    }
+    .handoff-panel[hidden] { display: none; }
+    .panel-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(240px, .88fr);
+      gap: 2rem;
+    }
+    .loop-level {
+      display: inline-flex;
+      align-items: center;
+      min-height: 31px;
+      padding: .2rem .65rem;
+      margin-bottom: .9rem;
+      color: var(--accent-dark);
+      background: var(--accent-soft);
+      border-radius: var(--r-pill);
+      font-size: .68rem;
+      font-weight: 820;
+    }
+    .panel-copy ul { margin: 1.1rem 0 0; padding-left: 1.2rem; color: var(--ink-soft); }
+    .panel-copy li + li { margin-top: .55rem; }
+    .panel-copy pre {
+      margin: 1.2rem 0 0;
+      padding: 1rem;
+      overflow-x: auto;
+      color: oklch(91% 0.014 75);
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      font-size: .76rem;
+      line-height: 1.65;
+    }
+    .control-stack { display: grid; gap: .7rem; }
+    .control-row {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: .8rem;
+      align-items: baseline;
+      padding: .82rem .9rem;
+      background: var(--paper);
+      border-radius: var(--r-sm);
+    }
+    .control-row b { color: var(--accent-dark); font-family: "SFMono-Regular", Consolas, monospace; font-size: .66rem; }
+    .control-row span { color: var(--ink-soft); font-size: .8rem; line-height: 1.5; }
+    .control-row.handled { background: var(--accent-soft); }
+
+    .selector {
+      display: grid;
+      grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+      gap: 1.3rem;
+      margin-top: 2.2rem;
+    }
+    .selector-questions, .selector-result {
+      padding: 1.35rem;
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .selector-title {
+      margin-bottom: 1rem;
+      color: var(--accent-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .68rem;
+      font-weight: 820;
+      letter-spacing: .08em;
+    }
+    .question + .question { margin-top: 1.1rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
+    .question b { display: block; margin-bottom: .55rem; font-size: .88rem; }
+    .choices { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .choice {
+      min-height: 40px;
+      padding: .42rem .72rem;
+      color: var(--muted);
+      background: var(--paper-2);
+      border: 0;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+      font-size: .76rem;
+      transition-property: transform, background-color, color;
+      transition-duration: 160ms;
+    }
+    .choice:active { transform: scale(.96); }
+    .choice.active { color: var(--paper); background: var(--accent-dark); }
+    .result-kicker { color: var(--muted); font-size: .76rem; }
+    .result-name {
+      margin: .25rem 0 .7rem;
+      color: var(--accent-dark);
+      font-family: "Iowan Old Style", "Songti SC", serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.08;
+    }
+    .result-why { color: var(--ink-soft); }
+    .result-command {
+      margin: 1.1rem 0;
+      padding: 1rem;
+      overflow-x: auto;
+      color: oklch(91% 0.014 75);
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      font-size: .76rem;
+      line-height: 1.65;
+    }
+    .result-note {
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .quality-stack {
+      display: grid;
+      grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+      gap: 2rem;
+      margin-top: 2.2rem;
+      align-items: start;
+    }
+    .stack-visual { display: grid; gap: .55rem; }
+    .stack-layer {
+      position: relative;
+      padding: 1rem 1.1rem;
+      background: var(--paper);
+      border-radius: var(--r-sm);
+      box-shadow: 0 1px 3px rgba(65,43,22,.095);
+    }
+    .stack-layer::before {
+      content: attr(data-step);
+      position: absolute;
+      right: .9rem;
+      top: .8rem;
+      color: var(--paper-3);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 1.45rem;
+      font-weight: 850;
+    }
+    .stack-layer:nth-child(2) { margin-left: 5%; }
+    .stack-layer:nth-child(3) { margin-left: 10%; }
+    .stack-layer:nth-child(4) { margin-left: 15%; background: var(--accent-soft); }
+    .stack-layer b { display: block; margin-bottom: .3rem; }
+    .stack-layer span { display: block; max-width: 82%; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+    .quality-list { border-top: 1px solid var(--line); }
+    .quality-item { border-bottom: 1px solid var(--line); }
+    .quality-item summary {
+      min-height: 66px;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: .75rem;
+      align-items: center;
+      padding: .75rem 0;
+      cursor: pointer;
+      list-style: none;
+    }
+    .quality-item summary::-webkit-details-marker { display: none; }
+    .quality-no { color: var(--accent-dark); font-family: "SFMono-Regular", Consolas, monospace; font-size: .68rem; font-weight: 820; }
+    .quality-copy strong { display: block; }
+    .quality-copy span { display: block; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+    .quality-plus { color: var(--accent); font-size: 1.15rem; transition: transform 150ms cubic-bezier(.16,1,.3,1); }
+    .quality-item[open] .quality-plus { transform: rotate(45deg); }
+    .quality-body { padding: 0 0 1rem 2.65rem; color: var(--ink-soft); font-size: .88rem; }
+
+    .token-equation {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+      gap: .55rem;
+      align-items: center;
+      margin-top: 2.2rem;
+      padding: 1.3rem;
+      background: var(--paper-2);
+      border-radius: var(--r-md);
+      text-align: center;
+    }
+    .token-factor strong { display: block; font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.04rem; }
+    .token-factor span { color: var(--muted); font-size: .7rem; }
+    .operator { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: 1.15rem; font-weight: 850; }
+    .guardrails {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .7rem;
+      margin-top: 1rem;
+    }
+    .guardrail {
+      min-height: 154px;
+      padding: 1rem;
+      background: var(--paper);
+      border-radius: var(--r-sm);
+      box-shadow: 0 1px 3px rgba(65,43,22,.095);
+    }
+    .guardrail b { display: block; margin-bottom: .45rem; }
+    .guardrail p { margin: 0; color: var(--muted); font-size: .79rem; line-height: 1.56; }
+
+    .starter {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .75rem;
+      margin-top: 2.2rem;
+      counter-reset: starter;
+    }
+    .starter-step {
+      counter-increment: starter;
+      min-height: 230px;
+      padding: 1.2rem;
+      background: var(--paper);
+      border-radius: var(--r-md);
+      box-shadow: var(--shadow);
+    }
+    .starter-step::before {
+      content: "0" counter(starter);
+      display: block;
+      margin-bottom: 1.25rem;
+      color: var(--accent-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .68rem;
+      font-weight: 820;
+    }
+    .starter-step p { color: var(--muted); font-size: .84rem; line-height: 1.6; }
+    .starter-step code { display: block; margin-top: 1rem; padding: .72rem; color: var(--paper); background: var(--ink); line-height: 1.6; }
+    .closing {
+      padding: 5rem 0 1rem;
+      scroll-margin-top: 4.5rem;
+    }
+    .closing-line {
+      margin: 1.8rem 0;
+      padding: 1.55rem 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      font-family: "Iowan Old Style", "Songti SC", serif;
+      font-size: clamp(1.4rem, 3vw, 2.15rem);
+      line-height: 1.48;
+    }
+    .closing-note { color: var(--muted); font-size: .8rem; }
+    .page-footer {
+      margin-top: 4.5rem;
+      padding-top: 1.6rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .footer-source { margin-bottom: .75rem; }
+
+    .production-meta {
+      --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep, #f4ead7)));
+      --production-ink: var(--ink, #25211c);
+      --production-muted: var(--muted, #6f675d);
+      --production-line: var(--line, #dacdb8);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1rem 0 0;
+    }
+    .production-label {
+      margin-right: .1rem;
+      color: var(--production-muted);
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .production-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: .38rem;
+      padding: .22rem .58rem;
+      background: var(--production-surface);
+      border-radius: 999px;
+      line-height: 1.35;
+    }
+    .production-key {
+      color: var(--production-muted);
+      font-size: .68rem;
+      letter-spacing: .04em;
+    }
+    .production-value {
+      color: var(--production-ink);
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      font-size: .72rem;
+      font-weight: 650;
+    }
+    .production-divider {
+      width: 1px;
+      height: 1.1rem;
+      margin: 0 .1rem;
+      background: var(--production-line);
+    }
+
+    @media (hover: hover) {
+      a:hover { color: var(--accent); }
+      .top-link:hover, .choice:hover:not(.active) { background: var(--paper-2); }
+      .top-link.source:hover { color: var(--paper); background: var(--accent-dark); }
+      .handoff-tab:hover:not(.active) { color: var(--ink); background: var(--paper-3); }
+    }
+
+    @media (max-width: 980px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .loop-orbit { width: min(100%, 340px); }
+    }
+
+    @media (max-width: 880px) {
+      .layout { display: block; padding-top: 3.6rem; }
+      .toc { display: none; }
+      .anatomy { grid-template-columns: 1fr 1fr; }
+      .anatomy-step:nth-child(2)::after { display: none; }
+      .handoff-tabs { grid-template-columns: 1fr 1fr; }
+      .selector, .quality-stack { grid-template-columns: 1fr; }
+      .guardrails { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      .top-link:not(.source) { display: none; }
+      .layout { width: min(100% - 1.15rem, var(--max)); padding-top: 2.8rem; }
+      .hero { padding-bottom: 3.5rem; }
+      h1 { font-size: clamp(2.65rem, 14vw, 4.2rem); }
+      .loop-orbit { transform: scale(.92); margin-block: -1rem; }
+      .tldr-grid { grid-template-columns: 1fr; }
+      .tldr-item + .tldr-item { border-left: 0; border-top: 1px solid var(--line); padding: 1rem 0 0; }
+      section { padding: 4.1rem 0; }
+      .anatomy { grid-template-columns: 1fr; }
+      .anatomy-step:not(:last-child)::after {
+        content: "↓";
+        display: block;
+        right: 50%;
+        top: auto;
+        bottom: -.9rem;
+      }
+      .loop-test { grid-template-columns: 1fr; text-align: left; }
+      .loop-test .decision { justify-self: start; }
+      .handoff-map { padding: .8rem; border-radius: var(--r-md); }
+      .handoff-tabs { grid-template-columns: 1fr 1fr; }
+      .handoff-tab { min-height: 88px; }
+      .handoff-panel { padding: 1rem; }
+      .panel-grid { grid-template-columns: 1fr; }
+      .control-row { grid-template-columns: 76px minmax(0, 1fr); }
+      .selector-questions, .selector-result { padding: 1rem; border-radius: var(--r-md); }
+      .token-equation { grid-template-columns: 1fr; text-align: left; }
+      .operator { transform: rotate(90deg); justify-self: center; }
+      .guardrails, .starter { grid-template-columns: 1fr; }
+      .starter-step { min-height: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到正文</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">VGalaxies · 可视化阅读</a>
+      <nav class="top-links" aria-label="页首导航">
+        <a class="top-link" href="#types">四类 Loop</a>
+        <a class="top-link" href="#choose">怎么选</a>
+        <a class="top-link source" href="https://x.com/ClaudeDevs/status/2074208949205881033" target="_blank" rel="noreferrer">原文 ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout" id="top">
+    <main id="main-content">
+      <header class="hero">
+        <div class="hero-grid">
+          <div>
+            <div class="eyebrow">
+              <span>Claude Code</span>
+              <span>Getting started with loops</span>
+              <span>2026.07.06</span>
+            </div>
+            <h1>Loop 不是让 Agent 一直跑</h1>
+            <p class="hero-deck">真正的 loop，是把任务设计成<strong>工作、验证、修正、停止</strong>的闭环。你交出去的不是一句更长的 prompt，而是一部分控制权。</p>
+            <div class="hero-meta">
+              <span>原作者 @ClaudeDevs</span>
+              <span>文末署名 @delba_oliveira</span>
+              <a href="https://x.com/ClaudeDevs/status/2074208949205881033" target="_blank" rel="noreferrer">阅读原文</a>
+            </div>
+          </div>
+
+          <div class="loop-orbit" aria-label="Loop 的四个组成部分：触发、工作、验证、停止">
+            <div class="orbit-ring"></div>
+            <div class="orbit-center">LOOP</div>
+            <div class="orbit-node trigger"><b>触发</b><span>谁让下一轮开始</span></div>
+            <div class="orbit-node work"><b>工作</b><span>每轮具体做什么</span></div>
+            <div class="orbit-node verify"><b>验证</b><span>结果是否足够好</span></div>
+            <div class="orbit-node stop"><b>停止</b><span>何时退出闭环</span></div>
+          </div>
+        </div>
+
+        <div class="tldr">
+          <div class="tldr-label">30 秒结论</div>
+          <div class="tldr-grid">
+            <div class="tldr-item">
+              <b>普通提示已经是 loop</b>
+              <p>Claude 读取上下文、行动、检查，再决定继续还是交还给你。</p>
+            </div>
+            <div class="tldr-item">
+              <b>四类 loop 是自治阶梯</b>
+              <p>从交出检查、停止条件、触发时机，到交出稳定的重复工作流。</p>
+            </div>
+            <div class="tldr-item">
+              <b>越自治，边界越要明确</b>
+              <p>成功标准、轮数、频率、模型、脚本和 usage 观测缺一不可。</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section id="anatomy">
+        <span class="section-no">01 · LOOP ANATOMY</span>
+        <h2>先别问用哪个命令，先回答四个问题</h2>
+        <p class="lead">Claude Code 团队给出的定义很朴素：Agent 重复工作周期，直到停止条件成立。差异不在“有没有循环”，而在循环的四个控制点由谁掌握。</p>
+
+        <div class="anatomy">
+          <article class="anatomy-step">
+            <span class="anatomy-key">TRIGGER</span>
+            <strong>谁启动下一轮？</strong>
+            <p>人发一条 prompt、计时器到点，还是外部事件出现。触发方式决定 loop 是否需要人在场。</p>
+          </article>
+          <article class="anatomy-step">
+            <span class="anatomy-key">WORK</span>
+            <strong>一轮做哪些事？</strong>
+            <p>读上下文、修改代码、运行工具、回复消息。工作单元越清楚，偏航越容易发现。</p>
+          </article>
+          <article class="anatomy-step">
+            <span class="anatomy-key">VERIFY</span>
+            <strong>怎样证明变好了？</strong>
+            <p>测试数量、性能分数、页面交互、队列是否清空。可量化检查比“看起来不错”更可靠。</p>
+          </article>
+          <article class="anatomy-step">
+            <span class="anatomy-key">STOP</span>
+            <strong>什么时候必须停？</strong>
+            <p>目标达成、达到最大轮数、工作已合并，或等待更多上下文。没有停止条件，就没有可控 loop。</p>
+          </article>
+        </div>
+
+        <div class="loop-test">
+          <div>
+            <strong>验证不通过</strong>
+            <span>把失败信息带进下一轮，继续修正</span>
+          </div>
+          <div class="decision">下一轮？</div>
+          <div>
+            <strong>目标达成或边界触发</strong>
+            <span>退出，并交付结果、状态和剩余风险</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="types">
+        <span class="section-no">02 · AUTONOMY LADDER</span>
+        <h2>四种 loop，是四次控制权交接</h2>
+        <p class="lead">这不是四个互相排斥的产品功能，而是一条从人工协作到主动运行的阶梯。点击查看每一级你交出了什么，又必须保留什么护栏。</p>
+
+        <div class="handoff-map">
+          <div class="handoff-tabs" role="tablist" aria-label="四类 Loop">
+            <button class="handoff-tab active" id="turn-tab" type="button" role="tab" aria-selected="true" aria-controls="turn-panel" tabindex="0" data-panel="turn-panel">
+              <small>LEVEL 01</small>
+              <span>Turn-based</span>
+            </button>
+            <button class="handoff-tab" id="goal-tab" type="button" role="tab" aria-selected="false" aria-controls="goal-panel" tabindex="-1" data-panel="goal-panel">
+              <small>LEVEL 02</small>
+              <span>Goal-based</span>
+            </button>
+            <button class="handoff-tab" id="time-tab" type="button" role="tab" aria-selected="false" aria-controls="time-panel" tabindex="-1" data-panel="time-panel">
+              <small>LEVEL 03</small>
+              <span>Time-based</span>
+            </button>
+            <button class="handoff-tab" id="proactive-tab" type="button" role="tab" aria-selected="false" aria-controls="proactive-panel" tabindex="-1" data-panel="proactive-panel">
+              <small>LEVEL 04</small>
+              <span>Proactive</span>
+            </button>
+          </div>
+
+          <article class="handoff-panel" id="turn-panel" role="tabpanel" aria-labelledby="turn-tab">
+            <div class="panel-grid">
+              <div class="panel-copy">
+                <span class="loop-level">人在场，Agent 做一轮完整工作</span>
+                <h3>Turn-based：先交出“检查”</h3>
+                <p>每条 prompt 都会启动一次 agentic loop。Claude 收集上下文、行动、检查并回复，你再决定下一步。</p>
+                <ul>
+                  <li><strong>适合：</strong>短任务、探索、需要人持续判断方向的工作。</li>
+                  <li><strong>停止：</strong>Claude 判断完成，或发现缺少上下文。</li>
+                  <li><strong>增强：</strong>把人工验收流程写成 SKILL.md，让 Agent 能自行看见、操作和测量结果。</li>
+                </ul>
+                <pre>检查页面交互
+运行测试与性能审计
+控制台必须无新增错误
+失败后修复，并从头复验</pre>
+              </div>
+              <div class="control-stack" aria-label="Turn-based 的控制权">
+                <div class="control-row handled"><b>交给 Agent</b><span>执行和端到端检查</span></div>
+                <div class="control-row"><b>仍由人控制</b><span>何时发起下一轮</span></div>
+                <div class="control-row"><b>仍由人控制</b><span>方向和“够不够好”的最终判断</span></div>
+                <div class="control-row"><b>成本边界</b><span>写具体 prompt，减少来回轮数</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="handoff-panel" id="goal-panel" role="tabpanel" aria-labelledby="goal-tab" hidden>
+            <div class="panel-grid">
+              <div class="panel-copy">
+                <span class="loop-level">人在场，Agent 迭代到可验证目标</span>
+                <h3>Goal-based：再交出“何时算完成”</h3>
+                <p>当一次执行不够时，明确成功条件，让 evaluator 在每次 Agent 想停止时重新检查。未达标就继续，达标或触及轮数上限才退出。</p>
+                <ul>
+                  <li><strong>适合：</strong>有确定退出条件的复杂任务。</li>
+                  <li><strong>停止：</strong>目标达成，或达到最大尝试次数。</li>
+                  <li><strong>最有效的标准：</strong>测试全部通过、错误数量归零、分数达到阈值。</li>
+                </ul>
+                <pre>/goal 将首页 Lighthouse 提升到 90+
+最多尝试 5 轮</pre>
+              </div>
+              <div class="control-stack" aria-label="Goal-based 的控制权">
+                <div class="control-row handled"><b>交给 Agent</b><span>多轮执行和修正</span></div>
+                <div class="control-row handled"><b>交给 evaluator</b><span>按条件判断是否达标</span></div>
+                <div class="control-row"><b>仍由人控制</b><span>目标定义和最大轮数</span></div>
+                <div class="control-row"><b>成本边界</b><span>阈值越明确，越少浪费在主观判断</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="handoff-panel" id="time-panel" role="tabpanel" aria-labelledby="time-tab" hidden>
+            <div class="panel-grid">
+              <div class="panel-copy">
+                <span class="loop-level">不必盯着，按时间检查外部世界</span>
+                <h3>Time-based：继续交出“何时开始”</h3>
+                <p>有些工作内容不变，只是输入持续变化。有些任务要等 PR review、CI 或队列状态。最简单的接口，就是按时间间隔检查变化并响应。</p>
+                <ul>
+                  <li><strong>适合：</strong>周期摘要、PR 跟进、CI 修复、外部队列处理。</li>
+                  <li><strong>/loop：</strong>在本机按间隔重跑，机器关闭就停止。</li>
+                  <li><strong>/schedule：</strong>把 routine 放到云端，按计划执行。</li>
+                </ul>
+                <pre>/loop 10m 检查 PR
+处理新 review，并修复失败的 CI</pre>
+              </div>
+              <div class="control-stack" aria-label="Time-based 的控制权">
+                <div class="control-row handled"><b>交给时钟</b><span>到点自动触发下一轮</span></div>
+                <div class="control-row handled"><b>交给 Agent</b><span>读取外部状态并采取行动</span></div>
+                <div class="control-row"><b>仍由人控制</b><span>间隔、取消条件和权限范围</span></div>
+                <div class="control-row"><b>成本边界</b><span>频率匹配真实变化速度，不做无效轮询</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="handoff-panel" id="proactive-panel" role="tabpanel" aria-labelledby="proactive-tab" hidden>
+            <div class="panel-grid">
+              <div class="panel-copy">
+                <span class="loop-level">无人值守，稳定流程持续运转</span>
+                <h3>Proactive：最后交出“整条重复工作流”</h3>
+                <p>当输入流稳定、处理步骤清楚、成功标准可验证时，可以组合 schedule、goal、skills、dynamic workflows 和 auto mode，形成长期运行的主动例程。</p>
+                <ul>
+                  <li><strong>适合：</strong>bug 报告、issue triage、迁移、依赖升级等持续工作流。</li>
+                  <li><strong>停止：</strong>单个任务完成即退出，routine 持续到被关闭。</li>
+                  <li><strong>模型路由：</strong>快而便宜的模型做常规处理，强模型做判断和审查。</li>
+                </ul>
+                <pre>/schedule 每小时检查反馈
+/goal 本轮发现的报告全部分类、处理并回复
+复杂修复并行探索，再独立审查</pre>
+              </div>
+              <div class="control-stack" aria-label="Proactive 的控制权">
+                <div class="control-row handled"><b>交给 routine</b><span>触发、分派、执行和反馈</span></div>
+                <div class="control-row handled"><b>交给 workflow</b><span>并行探索与多 Agent 协作</span></div>
+                <div class="control-row"><b>仍由人控制</b><span>权限、预算、升级路径和总开关</span></div>
+                <div class="control-row"><b>成本边界</b><span>先小规模 pilot，再扩大输入和 Agent 数</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="choose">
+        <span class="section-no">03 · CHOOSE THE SMALLEST LOOP</span>
+        <h2>不是选最强的 loop，而是选最小的闭环</h2>
+        <p class="lead">原文反复强调：不是所有任务都需要复杂 loop。下面的选择器用任务特征给出最小起点，目的是降低自治和成本，而不是追求功能最多。</p>
+
+        <div class="selector">
+          <div class="selector-questions">
+            <div class="selector-title">你的任务更像哪一种？</div>
+            <div class="question" data-question="arrival">
+              <b>工作怎样到来？</b>
+              <div class="choices">
+                <button class="choice active" type="button" aria-pressed="true" data-value="now">现在一次</button>
+                <button class="choice" type="button" aria-pressed="false" data-value="interval">按时间变化</button>
+                <button class="choice" type="button" aria-pressed="false" data-value="stream">持续输入流</button>
+              </div>
+            </div>
+            <div class="question" data-question="done">
+              <b>“完成”能否量化？</b>
+              <div class="choices">
+                <button class="choice active" type="button" aria-pressed="true" data-value="fuzzy">需要人判断</button>
+                <button class="choice" type="button" aria-pressed="false" data-value="clear">有明确阈值</button>
+              </div>
+            </div>
+            <div class="question" data-question="presence">
+              <b>执行时需要人在场吗？</b>
+              <div class="choices">
+                <button class="choice active" type="button" aria-pressed="true" data-value="yes">需要</button>
+                <button class="choice" type="button" aria-pressed="false" data-value="no">不需要</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="selector-result" aria-live="polite">
+            <div class="result-kicker">建议从这里开始</div>
+            <div class="result-name" id="result-name">Turn-based loop</div>
+            <p class="result-why" id="result-why">任务现在发生，完成标准还需要你的判断。保留人工节奏，只把执行和验证写清楚。</p>
+            <pre class="result-command" id="result-command">明确任务 + 写出验证步骤
+让 Claude 执行、检查并汇报
+你决定是否开启下一轮</pre>
+            <p class="result-note" id="result-note">先把经常重复的验收动作做成 skill，再考虑交出更多控制权。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="quality">
+        <span class="section-no">04 · QUALITY SYSTEM</span>
+        <h2>输出质量不只来自模型，更来自 loop 外面的系统</h2>
+        <p class="lead">同一个模型放进不同仓库、验证方式和 review 流程，结果会完全不同。原文把质量责任放回系统设计：代码库提供惯例，skill 定义验收，独立 reviewer 提供新鲜视角。</p>
+
+        <div class="quality-stack">
+          <div class="stack-visual" aria-label="Loop 的质量栈">
+            <div class="stack-layer" data-step="01">
+              <b>代码库惯例</b>
+              <span>干净的结构、清楚的命名和一致的模式，是 Agent 最先模仿的东西。</span>
+            </div>
+            <div class="stack-layer" data-step="02">
+              <b>可执行验证</b>
+              <span>让 Agent 能看见、操作、测量结果，而不是只凭编辑成功就宣布完成。</span>
+            </div>
+            <div class="stack-layer" data-step="03">
+              <b>新鲜上下文审查</b>
+              <span>第二个 Agent 不受主 Agent 推理路径影响，更容易发现盲点。</span>
+            </div>
+            <div class="stack-layer" data-step="04">
+              <b>把失败写回系统</b>
+              <span>一次问题变成下一次的规则、测试、脚本或 skill，loop 才会持续变好。</span>
+            </div>
+          </div>
+
+          <div class="quality-list">
+            <details class="quality-item" open>
+              <summary>
+                <span class="quality-no">01</span>
+                <span class="quality-copy"><strong>验证要尽量量化</strong><span>“按钮能点”比“页面看起来不错”更容易自证。</span></span>
+                <span class="quality-plus">+</span>
+              </summary>
+              <div class="quality-body">把测试通过数、性能阈值、控制台错误数、截图前后差异等写进 skill。检查越可观测，Agent 越能闭环。</div>
+            </details>
+            <details class="quality-item">
+              <summary>
+                <span class="quality-no">02</span>
+                <span class="quality-copy"><strong>文档必须触手可及</strong><span>外部最佳实践会变化，别让 Agent 只靠旧记忆。</span></span>
+                <span class="quality-plus">+</span>
+              </summary>
+              <div class="quality-body">为框架、库和内部规范提供可访问的最新文档入口，让 loop 在每轮决策时都能核对真实约束。</div>
+            </details>
+            <details class="quality-item">
+              <summary>
+                <span class="quality-no">03</span>
+                <span class="quality-copy"><strong>审查者要有独立视角</strong><span>不要让主 Agent 自己给自己的推理背书。</span></span>
+                <span class="quality-plus">+</span>
+              </summary>
+              <div class="quality-body">用独立上下文的 reviewer 检查代码、风险和完成标准。对高风险任务，让 reviewer 能拒绝或要求重做。</div>
+            </details>
+            <details class="quality-item">
+              <summary>
+                <span class="quality-no">04</span>
+                <span class="quality-copy"><strong>修系统，不只修这一次</strong><span>重复出现的问题说明 loop 缺少护栏。</span></span>
+                <span class="quality-plus">+</span>
+              </summary>
+              <div class="quality-body">把失败转成测试、脚本、文档或 skill。否则下一轮只是用更多 token 重新犯同一个错误。</div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section id="tokens">
+        <span class="section-no">05 · TOKEN BOUNDARIES</span>
+        <h2>自治不是免费的，成本会沿四个维度相乘</h2>
+        <p class="lead">下面的公式是对原文建议的压缩心智模型。loop 的成本不只取决于单次调用，而是频率、尝试次数、并行 Agent 数与每轮 token 的乘积。</p>
+
+        <div class="token-equation" aria-label="Loop 成本心智模型">
+          <div class="token-factor"><strong>触发频率</strong><span>多久运行一次</span></div>
+          <div class="operator">×</div>
+          <div class="token-factor"><strong>尝试轮数</strong><span>多久才停</span></div>
+          <div class="operator">×</div>
+          <div class="token-factor"><strong>Agent 数</strong><span>是否并行扩张</span></div>
+          <div class="operator">×</div>
+          <div class="token-factor"><strong>每轮 token</strong><span>模型与上下文大小</span></div>
+        </div>
+
+        <div class="guardrails">
+          <article class="guardrail"><b>选对 primitive</b><p>小任务不需要多 Agent，也不需要长期 loop。先从 turn-based 开始。</p></article>
+          <article class="guardrail"><b>明确成功与停止</b><p>写清达到什么条件停止，以及最多尝试多少轮，防止过早或过晚退出。</p></article>
+          <article class="guardrail"><b>大规模前先 pilot</b><p>dynamic workflow 可能快速扩张。先用小样本估算质量与 usage。</p></article>
+          <article class="guardrail"><b>确定性工作用脚本</b><p>能稳定编码成脚本的步骤，不要让模型每次重新推理。</p></article>
+          <article class="guardrail"><b>降低无效轮询</b><p>外部系统一小时才变化，就不要每分钟检查一次。</p></article>
+          <article class="guardrail"><b>持续看 usage</b><p>按 skills、subagents、MCPs 和 workflow 拆解成本，及时停掉异常分支。</p></article>
+        </div>
+      </section>
+
+      <section id="start">
+        <span class="section-no">06 · START SMALL</span>
+        <h2>从一件“你正在成为瓶颈”的工作开始</h2>
+        <p class="lead">别先设计宏大的自治系统。找一件你反复介入的具体工作，识别你究竟卡在检查、停止条件、触发时机，还是整条流程。</p>
+
+        <div class="starter">
+          <article class="starter-step">
+            <h3>找到瓶颈</h3>
+            <p>回看最近一周：哪件事总在等你检查、催促、重新发 prompt，或重复执行同一套步骤？</p>
+            <code>我反复在做什么？</code>
+          </article>
+          <article class="starter-step">
+            <h3>只交出一个控制点</h3>
+            <p>先把验证写成 skill，或把成功阈值写进 goal。不要第一天就交出触发、权限和多 Agent 编排。</p>
+            <code>我能先交出哪一块？</code>
+          </article>
+          <article class="starter-step">
+            <h3>观察卡住与越界</h3>
+            <p>运行后记录它在哪里停滞、过度行动或浪费 token，再把观察结果写回停止条件和验证系统。</p>
+            <code>下一轮怎样更可控？</code>
+          </article>
+        </div>
+      </section>
+
+      <section class="closing" id="takeaway">
+        <span class="section-no">TAKEAWAY</span>
+        <h2>设计 loop，本质上是在设计责任边界</h2>
+        <p class="closing-line">先让 Agent 看得见“什么叫完成”，再让它多跑几轮。先证明一个小闭环可靠，再把更多触发、判断和流程交出去。</p>
+        <p class="closing-note">这篇文章最实用的提醒是：自动化的起点不是更复杂的编排，而是你能否明确说出自己正在交出哪一部分工作。</p>
+
+        <footer class="page-footer">
+          <p class="footer-source">原文：<a href="https://x.com/ClaudeDevs/status/2074208949205881033" target="_blank" rel="noreferrer">Getting started with loops · @ClaudeDevs</a>，2026-07-06。文末署名 @delba_oliveira。</p>
+          <p class="production-meta"
+             data-llm-model="GPT-5.6 Sol"
+             data-llm-effort="xhigh">
+            <span class="production-label">制作信息</span>
+            <span class="production-chip">
+              <span class="production-key">LLM</span>
+              <span class="production-value">GPT-5.6 Sol</span>
+            </span>
+            <span class="production-chip">
+              <span class="production-key">effort</span>
+              <span class="production-value">xhigh</span>
+            </span>
+          </p>
+        </footer>
+      </section>
+    </main>
+
+    <aside class="toc" aria-label="页内目录">
+      <p class="toc-label">阅读路径</p>
+      <a href="#anatomy">Loop 的四个控制点</a>
+      <a href="#types">四级自治阶梯</a>
+      <a href="#choose">选择最小闭环</a>
+      <a href="#quality">质量来自系统</a>
+      <a href="#tokens">Token 护栏</a>
+      <a href="#start">从哪里开始</a>
+    </aside>
+  </div>
+
+  <script>
+    const handoffTabs = Array.from(document.querySelectorAll('.handoff-tab'));
+    const handoffPanels = Array.from(document.querySelectorAll('.handoff-panel'));
+
+    handoffTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.panel;
+        handoffTabs.forEach((item) => {
+          const active = item === tab;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', String(active));
+          item.setAttribute('tabindex', active ? '0' : '-1');
+        });
+        handoffPanels.forEach((panel) => {
+          panel.hidden = panel.id !== target;
+        });
+      });
+
+      tab.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const current = handoffTabs.indexOf(tab);
+        const offset = event.key === 'ArrowRight' ? 1 : -1;
+        const next = handoffTabs[(current + offset + handoffTabs.length) % handoffTabs.length];
+        next.focus();
+        next.click();
+      });
+    });
+
+    const state = {
+      arrival: 'now',
+      done: 'fuzzy',
+      presence: 'yes'
+    };
+
+    const recommendations = {
+      turn: {
+        name: 'Turn-based loop',
+        why: '任务现在发生，完成标准还需要你的判断。保留人工节奏，只把执行和验证写清楚。',
+        command: '明确任务 + 写出验证步骤\n让 Claude 执行、检查并汇报\n你决定是否开启下一轮',
+        note: '先把经常重复的验收动作做成 skill，再考虑交出更多控制权。'
+      },
+      goal: {
+        name: 'Goal-based loop',
+        why: '工作现在发生，而且你能定义明确的成功阈值。把停止判断交给 evaluator，但保留最大轮数。',
+        command: '/goal 达到明确指标\n失败后继续修正\n最多尝试 N 轮',
+        note: '优先使用测试数、错误数、性能分数等确定性条件。'
+      },
+      time: {
+        name: 'Time-based loop',
+        why: '输入按时间变化，不需要你实时盯着。让 /loop 或 /schedule 负责触发，工作逻辑保持单一。',
+        command: '/loop 适当间隔 检查外部状态\n有变化才行动\n完成或取消时停止',
+        note: '间隔要匹配真实变化速度，本地运行用 /loop，云端 routine 用 /schedule。'
+      },
+      proactive: {
+        name: 'Proactive loop',
+        why: '工作持续到来、处理路径稳定、执行时不需要人在场。可以组合 schedule、goal、skills 与 workflow。',
+        command: '按事件或日程触发\n每个输入都有成功与停止条件\n复杂判断升级给更强模型或 reviewer',
+        note: '先在小输入上 pilot，确认权限、质量和 usage，再逐步扩大。'
+      }
+    };
+
+    function recommendationKey() {
+      if (state.arrival === 'stream' && state.presence === 'no') {
+        return 'proactive';
+      }
+      if (state.arrival === 'interval') {
+        return 'time';
+      }
+      if (state.done === 'clear') {
+        return 'goal';
+      }
+      return 'turn';
+    }
+
+    function renderRecommendation() {
+      const result = recommendations[recommendationKey()];
+      document.getElementById('result-name').textContent = result.name;
+      document.getElementById('result-why').textContent = result.why;
+      document.getElementById('result-command').textContent = result.command;
+      document.getElementById('result-note').textContent = result.note;
+    }
+
+    document.querySelectorAll('.question').forEach((question) => {
+      question.querySelectorAll('.choice').forEach((choice) => {
+        choice.addEventListener('click', () => {
+          question.querySelectorAll('.choice').forEach((item) => {
+            const active = item === choice;
+            item.classList.toggle('active', active);
+            item.setAttribute('aria-pressed', String(active));
+          });
+          state[question.dataset.question] = choice.dataset.value;
+          renderRecommendation();
+        });
+      });
+    });
+
+    const sections = Array.from(document.querySelectorAll('main section[id]'));
+    const tocLinks = Array.from(document.querySelectorAll('.toc a'));
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        tocLinks.forEach((link) => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + visible.target.id);
+        });
+      }, { rootMargin: '-18% 0px -62% 0px', threshold: [0.05, 0.25, 0.55] });
+
+      sections.forEach((section) => observer.observe(section));
+    }
+  </script>
+</body>
+</html>

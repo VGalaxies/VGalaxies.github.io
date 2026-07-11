@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: claude-code-loop-patterns
+    title: 'Claude Code 的四类 loop 怎么选'
+    date: 2026-07-12
+    source_type: blog
+    source_url: 'https://x.com/ClaudeDevs/status/2074208949205881033'
   - slug: trustworthy-agent-benchmarks
     title: 'AI Agent benchmark 怎么被刷出虚假高分'
     date: 2026-07-12
