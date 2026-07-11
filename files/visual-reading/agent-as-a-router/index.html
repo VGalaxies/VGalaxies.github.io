@@ -491,7 +491,28 @@
       .metric { min-height: 0; }
       .bar-row { grid-template-columns: 92px minmax(0, 1fr) 48px; gap: .5rem; }
       .dataset-stats { grid-template-columns: 1fr 1fr; }
-      .comparison-wrap { overflow-x: auto; }
+      .comparison-wrap {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+      }
+      .comparison-wrap::before {
+        content: "左右滑动查看完整表格 →";
+        position: sticky;
+        left: 0;
+        display: block;
+        width: max-content;
+        margin: 0 0 .55rem;
+        padding: .16rem .42rem;
+        background: var(--paper-2);
+        color: var(--accent-dark);
+        border-radius: var(--r-sm);
+        font-family: ui-monospace, monospace;
+        font-size: .68rem;
+        font-weight: 760;
+        letter-spacing: .035em;
+      }
       .comparison-table { min-width: 620px; }
       .figure-body { padding-inline: .9rem; }
     }
