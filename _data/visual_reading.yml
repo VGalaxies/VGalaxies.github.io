@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: agent-as-a-router
+    title: 'Agent-as-a-Router 怎么从执行反馈中学会选模型'
+    date: 2026-07-12
+    source_type: paper
+    source_url: 'https://arxiv.org/pdf/2606.22902v3'
   - slug: finding-your-unknowns
     title: 'Agent 做得越多，越要先找到自己的未知项'
     date: 2026-07-12

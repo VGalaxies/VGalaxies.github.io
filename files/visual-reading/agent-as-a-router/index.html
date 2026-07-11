@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Agent-as-a-Router 论文中文可视化阅读：从信息缺口、C-A-F 闭环、ACRouter 架构到 CodeRouterBench 的 ID 与 OOD 结果。">
+  <title>Agent-as-a-Router：让路由器从执行中学会选模型</title>
+  <style>
+    :root {
+      --paper: #fbf6ea;
+      --paper-2: #f4ead7;
+      --paper-3: #e8dcc7;
+      --paper-4: #ded0b8;
+      --card: #fffaf0;
+      --ink: #27221c;
+      --ink-soft: #443a30;
+      --muted: #71675c;
+      --line: #d9ccb6;
+      --accent: #a4512f;
+      --accent-dark: #7f3c24;
+      --accent-wash: #f0d8c8;
+      --shadow: 0 12px 32px rgba(78, 55, 30, .09);
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 14px;
+      --max: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: var(--accent-dark); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { color: var(--accent); }
+    img { display: block; max-width: 100%; height: auto; }
+    button, a { touch-action: manipulation; }
+    button { font: inherit; }
+    :focus-visible { outline: 3px solid rgba(164, 81, 47, .28); outline-offset: 3px; }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: rgba(251, 246, 234, .97);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav {
+      max-width: var(--max);
+      margin: 0 auto;
+      min-height: 58px;
+      padding: .65rem 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.2rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Songti SC", "Noto Serif SC", serif;
+      font-size: .94rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .nav-links { display: flex; align-items: center; gap: .9rem; font-size: .88rem; }
+    .nav-links a { color: var(--muted); text-decoration: none; }
+    .nav-source { border-bottom: 1px solid currentColor; }
+    .reading-progress {
+      position: absolute;
+      left: 0;
+      bottom: -1px;
+      width: 0;
+      height: 2px;
+      background: var(--accent);
+    }
+
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 3.3rem 1.2rem 5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 240px;
+      gap: 3.5rem;
+      align-items: start;
+    }
+    article { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.2rem;
+      padding-left: 1.05rem;
+      border-left: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .86rem;
+    }
+    .toc strong { display: block; margin-bottom: .6rem; color: var(--ink); font-size: .8rem; letter-spacing: .08em; }
+    .toc a { display: block; padding: .25rem 0; color: var(--muted); text-decoration: none; line-height: 1.4; }
+    .toc a:hover { color: var(--accent-dark); }
+
+    .hero {
+      position: relative;
+      padding-bottom: 2.4rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .kicker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      align-items: center;
+      color: var(--accent-dark);
+      font-size: .82rem;
+      font-weight: 750;
+      letter-spacing: .05em;
+    }
+    .kicker span { padding: .18rem .55rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+    h1, h2, h3 { font-family: "Songti SC", "Noto Serif SC", "STSong", serif; text-wrap: balance; }
+    h1 {
+      max-width: 870px;
+      margin: 1.1rem 0 0;
+      font-size: clamp(2.65rem, 6vw, 5.6rem);
+      line-height: 1.04;
+      font-weight: 760;
+      letter-spacing: -.012em;
+    }
+    .paper-title {
+      margin: 1.1rem 0 0;
+      max-width: 800px;
+      color: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: .9rem;
+      line-height: 1.6;
+    }
+    .hero-deck {
+      max-width: 760px;
+      margin: 1.35rem 0 0;
+      color: var(--ink-soft);
+      font-size: 1.18rem;
+      line-height: 1.78;
+      text-wrap: pretty;
+    }
+    .hero-source { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.25rem; font-weight: 700; }
+
+    .thesis {
+      margin: 2rem 0 0;
+      padding: 1.35rem 1.45rem 1.45rem;
+      background: var(--ink);
+      color: #f8efe0;
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .thesis small { display: block; color: #ccbda9; font-weight: 750; letter-spacing: .1em; }
+    .thesis p { margin: .55rem 0 0; max-width: 820px; font-family: "Songti SC", "Noto Serif SC", serif; font-size: clamp(1.25rem, 2.4vw, 1.75rem); line-height: 1.55; }
+    .thesis em { color: #f0b895; font-style: normal; }
+
+    section { margin: 5rem 0; scroll-margin-top: 5.3rem; }
+    h2 { margin: 0 0 1.15rem; font-size: clamp(1.8rem, 3.6vw, 2.75rem); line-height: 1.22; letter-spacing: -.006em; }
+    h3 { margin: 2.1rem 0 .65rem; font-size: 1.24rem; line-height: 1.4; }
+    p { margin: .9rem 0; max-width: 72ch; text-wrap: pretty; }
+    .lead { max-width: 72ch; color: var(--ink-soft); font-size: 1.07rem; }
+    .section-no { display: block; margin-bottom: .5rem; color: var(--accent); font-family: ui-monospace, monospace; font-size: .78rem; font-weight: 760; letter-spacing: .08em; }
+    .eyebrow { color: var(--accent-dark); font-weight: 780; }
+    .muted { color: var(--muted); }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: 1.18fr .86fr .86fr .86fr;
+      gap: .75rem;
+      margin: 1.6rem 0 0;
+    }
+    .metric {
+      min-height: 138px;
+      padding: 1.05rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+    }
+    .metric.primary { background: var(--accent-wash); border-color: #dbb49c; }
+    .metric .num { display: block; color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: clamp(1.8rem, 4vw, 2.55rem); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .metric .label { display: block; margin-top: .4rem; font-weight: 760; line-height: 1.4; }
+    .metric .hint { display: block; margin-top: .35rem; color: var(--muted); font-size: .82rem; line-height: 1.48; }
+
+    .figure {
+      margin: 1.6rem 0 2.2rem;
+      overflow: hidden;
+      background: var(--card);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .figure img { width: 100%; background: #fff; outline: 1px solid rgba(0,0,0,.08); outline-offset: -1px; }
+    .figure-body { padding: 1rem 1.1rem 1.1rem; }
+    .fig-caption { margin: 0; color: var(--ink-soft); font-size: .92rem; }
+    .fig-toggle {
+      min-height: 40px;
+      margin-top: .55rem;
+      padding: .35rem 0;
+      border: 0;
+      background: transparent;
+      color: var(--accent-dark);
+      cursor: pointer;
+      font-weight: 760;
+    }
+    .figure-detail { max-height: 0; overflow: hidden; opacity: 0; transform: translateY(-5px); transition: max-height .28s ease, opacity .22s ease, transform .22s ease; }
+    .figure-detail.active { max-height: 900px; opacity: 1; transform: translateY(0); }
+    .figure-detail ul { margin: .45rem 0 0; padding-left: 1.2rem; color: var(--ink-soft); }
+    .figure-detail li { margin: .5rem 0; }
+
+    .diagnosis {
+      display: grid;
+      grid-template-columns: minmax(0, 1.18fr) minmax(260px, .82fr);
+      gap: 1.35rem;
+      margin: 1.6rem 0;
+      align-items: stretch;
+    }
+    .bar-panel, .note-panel { padding: 1.25rem; border-radius: var(--r-lg); }
+    .bar-panel { background: var(--card); border: 1px solid var(--line); }
+    .note-panel { display: flex; flex-direction: column; justify-content: space-between; background: var(--paper-2); }
+    .panel-title { margin: 0 0 1rem; font-size: .88rem; font-weight: 790; letter-spacing: .04em; }
+    .bar-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 54px; gap: .7rem; align-items: center; margin: .72rem 0; }
+    .bar-label { font-size: .84rem; font-weight: 700; }
+    .bar-track { height: 13px; overflow: hidden; background: var(--paper-3); border-radius: 999px; }
+    .bar-fill { display: block; height: 100%; width: var(--w); background: var(--ink-soft); border-radius: inherit; }
+    .bar-fill.accent { background: var(--accent); }
+    .bar-value { text-align: right; font-family: ui-monospace, monospace; font-size: .83rem; font-weight: 780; font-variant-numeric: tabular-nums; }
+    .note-panel .big { display: block; color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: 3.2rem; font-weight: 820; line-height: 1; }
+    .note-panel p { margin: .7rem 0 0; font-size: .94rem; }
+    .note-panel .logic { margin-top: 1.4rem; padding-top: .85rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
+
+    .caf-stage {
+      margin: 1.8rem 0 2rem;
+      padding: 1.25rem;
+      background: var(--ink);
+      color: #f7eedf;
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .caf-loop { display: grid; grid-template-columns: 1fr 54px 1fr 54px 1fr 54px 1fr; align-items: center; gap: .35rem; }
+    .caf-node { min-height: 154px; padding: 1rem; background: #342e27; border-radius: var(--r-md); }
+    .caf-node.memory { background: #5b3325; }
+    .caf-letter { display: block; color: #f0b895; font-family: ui-monospace, monospace; font-size: 2rem; font-weight: 840; line-height: 1; }
+    .caf-node strong { display: block; margin-top: .5rem; font-size: 1.02rem; }
+    .caf-node span { display: block; margin-top: .45rem; color: #cfc2b2; font-size: .82rem; line-height: 1.55; }
+    .caf-arrow { color: #cda98f; text-align: center; font-size: 1.7rem; }
+    .caf-return { margin-top: .85rem; padding-top: .8rem; border-top: 1px solid #564c42; color: #d7c7b5; text-align: center; font-size: .86rem; }
+
+    .formula {
+      margin: 1.2rem 0;
+      padding: 1.1rem 1.2rem;
+      overflow-x: auto;
+      background: var(--paper-2);
+      border-radius: var(--r-md);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      color: var(--ink-soft);
+      font-size: .9rem;
+      white-space: nowrap;
+    }
+
+    .module-list { display: grid; grid-template-columns: 1.04fr .96fr .96fr; gap: .8rem; margin: 1.4rem 0; }
+    .module { padding: 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .module .tag { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: .74rem; font-weight: 800; letter-spacing: .08em; }
+    .module h3 { margin: .45rem 0 .45rem; font-family: inherit; font-size: 1.06rem; }
+    .module p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .module ul { margin: .7rem 0 0; padding-left: 1.1rem; font-size: .86rem; color: var(--ink-soft); }
+
+    .benchmark-grid { display: grid; grid-template-columns: .85fr 1.15fr; gap: 1.1rem; margin: 1.5rem 0; }
+    .dataset-card { padding: 1.25rem; background: var(--paper-2); border-radius: var(--r-lg); }
+    .dataset-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .65rem; margin-top: 1rem; }
+    .dataset-stat { padding: .75rem; background: var(--card); border-radius: var(--r-md); }
+    .dataset-stat b { display: block; color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+    .dataset-stat span { color: var(--muted); font-size: .78rem; }
+    .dimension-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .dimension-list span { padding: .32rem .6rem; background: var(--card); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); font-size: .78rem; }
+    .ood-card { padding: 1.25rem; background: var(--ink); color: #f7eedf; border-radius: var(--r-lg); }
+    .ood-card h3 { margin: 0; color: #fff8ed; }
+    .ood-card p { color: #d7c8b8; }
+    .ood-card ul { margin: 1rem 0 0; padding-left: 1.2rem; color: #eee2d5; }
+
+    .result-switch { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; margin: 1.5rem 0; }
+    .result-panel { padding: 1.2rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); }
+    .result-panel.ood { background: var(--paper-2); }
+    .result-panel h3 { margin: 0 0 .25rem; font-family: inherit; }
+    .result-panel > p { margin: .2rem 0 1rem; color: var(--muted); font-size: .85rem; }
+    .result-row { margin: .8rem 0; }
+    .result-head { display: flex; justify-content: space-between; gap: .8rem; margin-bottom: .28rem; font-size: .82rem; }
+    .result-head b:last-child { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .result-track { height: 10px; background: var(--paper-3); border-radius: 999px; overflow: hidden; }
+    .result-fill { height: 100%; width: var(--w); background: #6d6257; border-radius: inherit; }
+    .result-row.acr .result-fill { background: var(--accent); }
+    .regret-note { display: grid; grid-template-columns: auto 1fr; gap: .85rem; align-items: center; margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--line); }
+    .regret-note .regret { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: 1.75rem; font-weight: 820; }
+    .regret-note span:last-child { color: var(--muted); font-size: .82rem; }
+
+    .comparison-table { width: 100%; margin: 1.4rem 0; border-collapse: collapse; font-size: .88rem; }
+    .comparison-table th, .comparison-table td { padding: .72rem .65rem; border-bottom: 1px solid var(--line); text-align: left; }
+    .comparison-table th { color: var(--muted); font-size: .76rem; letter-spacing: .04em; }
+    .comparison-table td.num { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .comparison-table tr.best td { background: var(--accent-wash); font-weight: 720; }
+
+    .depth-intro {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 1rem;
+      margin: 1.35rem 0;
+      padding: 1rem;
+      background: var(--paper-2);
+      border-radius: var(--r-lg);
+    }
+    .depth-intro b { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: .8rem; letter-spacing: .08em; }
+    .depth-intro p { margin: 0; color: var(--ink-soft); font-size: .92rem; }
+    .deep-stack { display: grid; gap: .72rem; margin: 1.35rem 0; }
+    .deep-card { margin: 0; padding: 0; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .deep-card summary {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      gap: .8rem;
+      align-items: center;
+      min-height: 70px;
+      padding: .7rem .9rem;
+      list-style: none;
+    }
+    .deep-card summary::-webkit-details-marker { display: none; }
+    .deep-index { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: .78rem; font-weight: 820; }
+    .deep-summary b { display: block; color: var(--ink); font-size: .94rem; }
+    .deep-summary span { display: block; margin-top: .15rem; color: var(--muted); font-size: .79rem; font-weight: 500; line-height: 1.45; }
+    .deep-state { color: var(--accent-dark); font-size: .76rem; white-space: nowrap; }
+    .deep-content { padding: .1rem 1rem 1rem 4.45rem; border-top: 1px solid var(--line); }
+    .deep-content p { font-size: .9rem; }
+    .mini-flow { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .85rem 0; }
+    .mini-flow span { padding: .3rem .55rem; background: var(--paper-2); border-radius: var(--r-sm); color: var(--ink-soft); font-size: .78rem; }
+    .mini-flow i { color: var(--accent); font-style: normal; }
+    .component-badges { display: flex; flex-wrap: wrap; gap: .42rem; margin: .7rem 0; }
+    .component-badges span { padding: .26rem .52rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .74rem; }
+    .component-badges .on { background: var(--accent-wash); border-color: #d9b49e; color: var(--accent-dark); font-weight: 760; }
+    .proof-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; margin: 1.2rem 0; }
+    .proof-card { padding: 1rem; background: var(--paper-2); border-radius: var(--r-md); }
+    .proof-card .proof-no { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: 1.75rem; font-weight: 820; line-height: 1; }
+    .proof-card b { display: block; margin-top: .45rem; }
+    .proof-card p { margin: .4rem 0 0; color: var(--muted); font-size: .84rem; }
+    .phase-flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin: 1.2rem 0; }
+    .phase { position: relative; padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .phase:not(:last-child)::after { content: "→"; position: absolute; right: -.62rem; top: 50%; z-index: 2; width: 1.2rem; color: var(--accent); text-align: center; transform: translateY(-50%); }
+    .phase small { color: var(--accent-dark); font-family: ui-monospace, monospace; font-weight: 800; }
+    .phase b { display: block; margin-top: .35rem; }
+    .phase p { margin: .4rem 0 0; color: var(--muted); font-size: .83rem; }
+    .dimension-table td:first-child { font-weight: 720; }
+    .dimension-table .eval { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: .78rem; }
+    .experiment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin: 1.25rem 0; }
+    .experiment { padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .experiment small { color: var(--accent-dark); font-family: ui-monospace, monospace; font-weight: 800; }
+    .experiment h3 { margin: .45rem 0; font-family: inherit; font-size: 1rem; }
+    .experiment p { margin: 0; color: var(--muted); font-size: .84rem; }
+    .experiment .range { display: block; margin-top: .7rem; color: var(--ink); font-family: ui-monospace, monospace; font-size: 1.28rem; font-weight: 800; }
+    .split-meter { display: grid; grid-template-columns: 27fr 73fr; overflow: hidden; height: 42px; margin: 1rem 0; border-radius: var(--r-md); color: #fff8ed; font-size: .78rem; font-weight: 760; }
+    .split-meter span { display: flex; align-items: center; justify-content: center; padding: .35rem; text-align: center; }
+    .split-meter span:first-child { background: var(--accent); }
+    .split-meter span:last-child { background: var(--ink-soft); }
+    .example-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; margin: 1.2rem 0; }
+    .example-card { padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .example-card .example-tag { color: var(--accent-dark); font-family: ui-monospace, monospace; font-size: .72rem; font-weight: 820; letter-spacing: .06em; }
+    .example-card h3 { margin: .4rem 0; font-family: inherit; font-size: 1rem; }
+    .example-card p { margin: .4rem 0; color: var(--muted); font-size: .84rem; }
+    .route-line { display: grid; grid-template-columns: auto 1fr; gap: .55rem; margin-top: .65rem; padding-top: .65rem; border-top: 1px solid var(--line); font-size: .78rem; }
+    .route-line b { color: var(--accent-dark); }
+    .source-chip { display: inline-block; margin-top: .55rem; padding: .18rem .44rem; background: var(--paper-2); border-radius: var(--r-sm); color: var(--muted); font-size: .72rem; }
+
+    details { margin: 1rem 0; padding: .15rem 1rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); }
+    summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; color: var(--ink-soft); font-weight: 730; }
+    details[open] { padding-bottom: .8rem; }
+    details p, details ul { color: var(--muted); font-size: .9rem; }
+
+    .takeaway-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin: 1.4rem 0; }
+    .takeaway { padding: 1.1rem; background: var(--card); border-top: 3px solid var(--paper-4); border-radius: 0 0 var(--r-md) var(--r-md); }
+    .takeaway:nth-child(3) { border-top-color: var(--accent); }
+    .takeaway b { display: block; margin-bottom: .45rem; }
+    .takeaway p { margin: 0; color: var(--muted); font-size: .88rem; }
+
+    .limits { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin: 1.3rem 0; }
+    .limit { padding: 1rem; background: var(--paper-2); border-radius: var(--r-md); }
+    .limit b { display: block; margin-bottom: .35rem; }
+    .limit p { margin: 0; color: var(--muted); font-size: .87rem; }
+
+    .closing {
+      margin: 4.8rem 0 2rem;
+      padding: 1.5rem;
+      background: var(--ink);
+      color: #f8efe0;
+      border-radius: var(--r-lg);
+    }
+    .closing p { margin: 0; max-width: 820px; font-family: "Songti SC", "Noto Serif SC", serif; font-size: clamp(1.2rem, 2.5vw, 1.65rem); line-height: 1.65; }
+    .closing strong { color: #f0b895; }
+
+    footer { padding-top: 1.6rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
+    footer p { max-width: 900px; }
+    .production-meta {
+      --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep, #f4ead7)));
+      --production-ink: var(--ink, #25211c);
+      --production-muted: var(--muted, #6f675d);
+      --production-line: var(--line, #dacdb8);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1rem 0 0;
+    }
+    .production-label {
+      margin-right: .1rem;
+      color: var(--production-muted);
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .production-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: .38rem;
+      padding: .22rem .58rem;
+      background: var(--production-surface);
+      border-radius: 999px;
+      line-height: 1.35;
+    }
+    .production-key { color: var(--production-muted); font-size: .68rem; letter-spacing: .04em; }
+    .production-value {
+      color: var(--production-ink);
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      font-size: .72rem;
+      font-weight: 650;
+    }
+    .production-divider { width: 1px; height: 1.1rem; margin: 0 .1rem; background: var(--production-line); }
+
+    @media (hover: hover) {
+      .metric, .module, .result-panel { transition: transform .18s ease, box-shadow .18s ease; }
+      .metric:hover, .module:hover, .result-panel:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(78, 55, 30, .08); }
+    }
+    @media (max-width: 900px) {
+      .page { grid-template-columns: 1fr; padding-top: 2.3rem; }
+      .toc { display: none; }
+      .metric-strip { grid-template-columns: repeat(2, 1fr); }
+      .diagnosis, .benchmark-grid { grid-template-columns: 1fr; }
+      .module-list { grid-template-columns: 1fr; }
+      .caf-loop { grid-template-columns: 1fr; }
+      .caf-arrow { transform: rotate(90deg); }
+      .result-switch { grid-template-columns: 1fr; }
+      .experiment-grid, .phase-flow { grid-template-columns: 1fr; }
+      .phase:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -.82rem; transform: translateX(-50%); }
+    }
+    @media (max-width: 620px) {
+      .nav { min-height: 54px; padding-inline: .9rem; }
+      .nav-links a:not(.nav-source) { display: none; }
+      .page { padding: 2rem .9rem 4rem; }
+      h1 { font-size: clamp(2.3rem, 14vw, 3.45rem); }
+      .hero-deck { font-size: 1.04rem; }
+      section { margin: 4rem 0; }
+      .metric-strip, .takeaway-grid, .limits { grid-template-columns: 1fr; }
+      .depth-intro, .proof-grid, .example-grid { grid-template-columns: 1fr; }
+      .deep-card summary { grid-template-columns: 34px minmax(0, 1fr); }
+      .deep-state { grid-column: 2; }
+      .deep-content { padding-left: 1rem; }
+      .metric { min-height: 0; }
+      .bar-row { grid-template-columns: 92px minmax(0, 1fr) 48px; gap: .5rem; }
+      .dataset-stats { grid-template-columns: 1fr 1fr; }
+      .comparison-wrap { overflow-x: auto; }
+      .comparison-table { min-width: 620px; }
+      .figure-body { padding-inline: .9rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="主导航">
+      <a class="brand" href="#top">VGalaxies · Visual Reading</a>
+      <div class="nav-links">
+        <a href="#loop">C-A-F 闭环</a>
+        <a href="#results">实验结论</a>
+        <a href="#examples">任务实例</a>
+        <a class="nav-source" href="https://arxiv.org/abs/2606.22902v3" target="_blank" rel="noreferrer">原文 ↗</a>
+      </div>
+      <span class="reading-progress" id="readingProgress" aria-hidden="true"></span>
+    </nav>
+  </header>
+
+  <main class="page" id="top">
+    <article>
+      <header class="hero">
+        <div class="kicker"><span>论文精读</span><span>2026.06</span><span>arXiv preprint · v3</span></div>
+        <h1>让路由器从执行中<br>学会选模型</h1>
+        <p class="paper-title" lang="en">Agent-as-a-Router: Agentic Model Routing for Coding Tasks</p>
+        <p class="hero-deck">当手里有 8 个能力和价格各异的模型时，真正困难的不是“能不能做选择”，而是<strong>路由器有没有见过这些模型在相似任务上的真实表现</strong>。这篇论文把一次性的模型分类，改写成一个会累积经验的执行反馈闭环。</p>
+        <div class="hero-source">
+          <a href="https://arxiv.org/abs/2606.22902v3" target="_blank" rel="noreferrer">阅读论文摘要页 ↗</a>
+          <a href="https://arxiv.org/pdf/2606.22902v3" target="_blank" rel="noreferrer">打开 v3 PDF ↗</a>
+        </div>
+        <div class="thesis">
+          <small>30 秒主旨</small>
+          <p>路由效果差，首先是<em>信息缺口</em>，不是推理不够强。让每次选择都经过执行验证，并把结果写进下一次选择的上下文，路由器才会在任务流中越用越懂。</p>
+        </div>
+        <div class="metric-strip" aria-label="论文关键数字">
+          <div class="metric primary"><span class="num">+15.3%</span><span class="label">只补充性能统计带来的相对提升</span><span class="hint">Vanilla 41.41 → +Perf stats 47.74</span></div>
+          <div class="metric"><span class="num">10,111</span><span class="label">CodeRouterBench 任务</span><span class="hint">10 个编码维度，15+ 数据源</span></div>
+          <div class="metric"><span class="num">8</span><span class="label">候选前沿模型</span><span class="hint">不同任务的最佳模型并不相同</span></div>
+          <div class="metric"><span class="num">17.0</span><span class="label">OOD 累计遗憾</span><span class="hint">ACRouter 在 176 个 agentic 任务上最低</span></div>
+        </div>
+      </header>
+
+      <section id="problem">
+        <span class="section-no">01 · 问题</span>
+        <h2>“选哪个模型”不是静态分类题</h2>
+        <p class="lead">现有路由器大致分两类：查表或规则映射，以及训练一个固定策略模型。它们都能根据当前任务做选择，但部署后信息状态冻结，无法从新任务的成功和失败中继续学习。</p>
+        <p>论文用一个简单但锋利的问题切入：<strong>路由模型表现不佳，究竟是因为不会推理，还是因为没有足够的信息？</strong> 这一区分决定了解法。前者会推动更大的路由模型，后者则要求建立验证和记忆机制。</p>
+
+        <figure class="figure">
+          <img src="imgs/three-router-strategies.jpg" width="1310" height="618" alt="论文图 1，对比启发式路由、静态训练策略和 Agent-as-a-Router">
+          <figcaption class="figure-body">
+            <p class="fig-caption"><strong>论文图 1：</strong>从静态映射、静态策略，到能够利用工具、反馈和记忆持续演化的 Agent-as-a-Router。</p>
+            <button class="fig-toggle" type="button" aria-expanded="false" aria-controls="fig1-detail">展开说明 ▸</button>
+            <div class="figure-detail" id="fig1-detail">
+              <ul>
+                <li><strong>启发式路由：</strong>依据关键词或维度查表，优点是便宜且可解释，缺点是只能复用预先写死的粒度。</li>
+                <li><strong>训练策略路由：</strong>能从语义特征中做更细的判断，但策略部署后仍保持静态，没有验证、记忆和在线更新。</li>
+                <li><strong>Agent-as-a-Router：</strong>把任务分析、模型池检查、工具执行、反馈和 Memory 串成循环。</li>
+                <li><strong>关键差别：</strong>能力提升并不来自一次决策更复杂，而来自“这一轮的真实结果会改变下一轮的上下文”。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+
+        <h3>一组消融，直接定位瓶颈</h3>
+        <div class="diagnosis">
+          <div class="bar-panel">
+            <p class="panel-title">AvgPerf%，2,919 个 ID 任务</p>
+            <div class="bar-row"><span class="bar-label">Vanilla</span><span class="bar-track"><span class="bar-fill" style="--w:72.65%"></span></span><span class="bar-value">41.41</span></div>
+            <div class="bar-row"><span class="bar-label">+Dimension</span><span class="bar-track"><span class="bar-fill" style="--w:72.25%"></span></span><span class="bar-value">41.18</span></div>
+            <div class="bar-row"><span class="bar-label">DimensionBest</span><span class="bar-track"><span class="bar-fill" style="--w:83.33%"></span></span><span class="bar-value">47.50</span></div>
+            <div class="bar-row"><span class="bar-label">+Perf stats</span><span class="bar-track"><span class="bar-fill accent" style="--w:83.75%"></span></span><span class="bar-value">47.74</span></div>
+            <div class="bar-row"><span class="bar-label">Oracle</span><span class="bar-track"><span class="bar-fill" style="--w:100%"></span></span><span class="bar-value">57.00</span></div>
+          </div>
+          <aside class="note-panel">
+            <div><span class="big">15.3%</span><p>同一个 Claude Sonnet 4.6 路由器，只是看到了 probing set 的维度级性能统计，就获得显著相对提升。</p></div>
+            <p class="logic"><strong>推论：</strong>任务维度名称本身几乎没用，模型在各维度的真实表现才是有效信息。下一步不是一味扩大路由模型，而是持续产生并积累这种信息。</p>
+          </aside>
+        </div>
+      </section>
+
+      <section id="taxonomy">
+        <span class="section-no">02 · 策略谱系</span>
+        <h2>把五类路由器放回同一套 C-A-F 坐标系</h2>
+        <p class="lead">论文没有只拿 ACRouter 和一个 baseline 比，而是把所有方法按 Orchestrator、Verifier、Memory 是否存在来拆解。这样可以看到，每种方法究竟在哪里打断了闭环。</p>
+        <div class="depth-intro"><b>递归深读层</b><p>下面每张卡片都先给出一句话定位，展开后再看它的 pipeline、启用的组件、能获得的信息，以及它为什么会在 ID 或 OOD 上表现成那样。</p></div>
+
+        <div class="deep-stack">
+          <details class="deep-card">
+            <summary><span class="deep-index">01</span><span class="deep-summary"><b>Single-Model：完全不路由</b><span>Always-m 把每个任务都交给同一个模型，是性能与成本的参照底线。</span></span><span class="deep-state">无闭环</span></summary>
+            <div class="deep-content">
+              <div class="mini-flow"><span>任意任务</span><i>→</i><span>固定模型 m</span><i>→</i><span>输出</span></div>
+              <div class="component-badges"><span>Orchestrator：直接分发</span><span>Verifier：无</span><span>Memory：无</span></div>
+              <p>它没有任务级选择能力，因此即使某个模型平均最强，也会错过其他模型在算法、测试生成或数据科学上的专长。Always-Opus 4.6 在 ID 上 AvgPerf 为 43.83，成本为 34.02 美元；ACRouter 以 13.21 美元达到 49.98。</p>
+            </div>
+          </details>
+
+          <details class="deep-card">
+            <summary><span class="deep-index">02</span><span class="deep-summary"><b>Static Heuristic：用冻结先验查表</b><span>DimensionBest 和 frozen kNN 能利用 probing set，但部署中不会产生新知识。</span></span><span class="deep-state">C 冻结</span></summary>
+            <div class="deep-content">
+              <div class="mini-flow"><span>任务维度或 embedding</span><i>→</i><span>冻结 probing prior</span><i>→</i><span>模型选择</span></div>
+              <div class="component-badges"><span>Orchestrator：静态 lookup</span><span>Verifier：无</span><span class="on">Memory：冻结先验</span></div>
+              <p><strong>DimensionBest</strong> 按任务维度选择 probing set 上该维度最好的模型，ID AvgPerf 为 47.50。<strong>kNN Retrieval</strong> 用相似任务做更细粒度检索，ID 为 47.18，但 OOD 只有 14.29。两者都无法把部署时的新执行结果写回。</p>
+            </div>
+          </details>
+
+          <details class="deep-card">
+            <summary><span class="deep-index">03</span><span class="deep-summary"><b>Static Trained Policy：把选择学进模型参数</b><span>LogReg、MLP、RouteLLM、Qwen FT 能读任务特征，但策略上线后不再更新。</span></span><span class="deep-state">A 固定</span></summary>
+            <div class="deep-content">
+              <div class="mini-flow"><span>prompt 特征</span><i>→</i><span>训练好的分类器</span><i>→</i><span>模型标签</span></div>
+              <div class="component-badges"><span class="on">Orchestrator：训练策略</span><span>Verifier：无</span><span>Memory：无</span></div>
+              <p>这些方法在 ID 上集中在 46.16 到 47.26，成本通常只有 6.81 到 7.69 美元，因此是很强的稳定分布 baseline。但 OOD 上大幅跌到 8.93 到 55.36，其中轻量分类器只有 8.93 到 21.43，说明训练分布中的 prompt 特征不再携带同样的路由信号。</p>
+            </div>
+          </details>
+
+          <details class="deep-card">
+            <summary><span class="deep-index">04</span><span class="deep-summary"><b>Online Bandit：能更新 reward，但记忆表达较窄</b><span>LinUCB 和 LinTS 在线更新每个模型的线性后验，因此比静态方法更能适应 OOD。</span></span><span class="deep-state">弱闭环</span></summary>
+            <div class="deep-content">
+              <div class="mini-flow"><span>64 维投影或类别特征</span><i>→</i><span>per-arm posterior</span><i>→</i><span>argmax</span><i>→</i><span>reward 更新</span></div>
+              <div class="component-badges"><span class="on">Orchestrator：argmax</span><span class="on">Verifier：reward only</span><span class="on">Memory：参数后验</span></div>
+              <p>Bandit 具备在线适应能力，LinUCB 在 OOD 达到 49.82，明显好于大多数静态分类器。但它只保留压缩后的 reward 后验，没有任务级验证轨迹，也缺少能组合先验、近邻与元数据的推理式 Orchestrator。</p>
+            </div>
+          </details>
+
+          <details class="deep-card">
+            <summary><span class="deep-index">05</span><span class="deep-summary"><b>ACRouter：完整激活决策、验证和任务级记忆</b><span>每轮执行不仅得到 reward，还留下相似任务可检索的模型表现、成本和验证轨迹。</span></span><span class="deep-state">闭环完整</span></summary>
+            <div class="deep-content">
+              <div class="mini-flow"><span>动态 Context</span><i>→</i><span>LLM policy + tools</span><i>→</i><span>沙箱验证</span><i>→</i><span>embedding kNN Memory</span></div>
+              <div class="component-badges"><span class="on">Orchestrator：LLM + 投票</span><span class="on">Verifier：sandbox-native</span><span class="on">Memory：online task kNN</span></div>
+              <p>完整配置在 ID 上达到 49.98、CumReg 205.5，在 OOD 上达到 62.50、CumReg 17.0。它的优势不是单个组件独有，而是 Verifier 产生的信息能够通过 Memory 回到 Orchestrator。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section id="loop">
+        <span class="section-no">03 · 核心框架</span>
+        <h2>C-A-F：把每次执行变成下一次选择的上下文</h2>
+        <p class="lead">论文把路由过程形式化为 Context → Action → Feedback → Context。最重要的不是三个字母，而是最后一条回边：没有反馈写回，路由器仍然只是一次性分类器。</p>
+
+        <div class="caf-stage" role="img" aria-label="C-A-F 闭环，Context 产生 Action，执行得到 Feedback，反馈写入 Memory 并形成下一轮 Context">
+          <div class="caf-loop">
+            <div class="caf-node"><span class="caf-letter">C</span><strong>Context</strong><span>当前 prompt、难度与语言等元数据，以及过去循环积累的 Memory。</span></div>
+            <div class="caf-arrow" aria-hidden="true">→</div>
+            <div class="caf-node"><span class="caf-letter">A</span><strong>Action</strong><span>路由策略从 M 个候选模型中选择本任务要调用的模型。</span></div>
+            <div class="caf-arrow" aria-hidden="true">→</div>
+            <div class="caf-node"><span class="caf-letter">F</span><strong>Feedback</strong><span>在沙箱和验证工具中获得性能分数、成本和执行轨迹。</span></div>
+            <div class="caf-arrow" aria-hidden="true">→</div>
+            <div class="caf-node memory"><span class="caf-letter">C′</span><strong>Updated context</strong><span>把本轮结果写入 Memory，让下一次相似任务看到成功与失败。</span></div>
+          </div>
+          <div class="caf-return">任务流继续：C′ 成为下一轮 C。每完成一次循环，路由器的信息状态都更完整。</div>
+        </div>
+
+        <div class="formula">CumReg<sub>N</sub>(π) = Σ [每个任务的最优 reward − 路由选择的 reward]，越低越接近逐任务 oracle</div>
+        <p>单任务 reward 同时考虑性能与成本，论文的统一评估权重为 <code>r = score − 0.1 × USD cost</code>。因此，累计遗憾衡量的不是“选中全局最强模型的次数”，而是整个任务流中每次选择相对逐任务最优解损失了多少。</p>
+
+        <div class="proof-grid">
+          <div class="proof-card"><span class="proof-no">cᵢ</span><b>Context 不是 prompt 的同义词</b><p>它由 prompt、可选的维度/难度/语言元数据，以及此前全部循环形成的 Memory 状态共同组成。</p></div>
+          <div class="proof-card"><span class="proof-no">fᵢ</span><b>Feedback 必须 execution-grounded</b><p>包括 Verifier 观察到的任务分数和按 token 用量计算的成本，不依赖模型对自身答案的主观判断。</p></div>
+          <div class="proof-card"><span class="proof-no">O</span><b>Outcome matrix 保证公平回放</b><p>O 的每个单元保存某任务交给某模型时的真实分数与成本，不同路由器在相同结果表上选择。</p></div>
+          <div class="proof-card"><span class="proof-no">a*</span><b>Oracle 每个任务重新选择</b><p>它不是固定使用平均最强模型，而是对每个任务单独选择 reward 最大的候选模型。</p></div>
+        </div>
+
+        <details>
+          <summary>展开数学定义：从模型池和任务流到 reward matrix 与 cumulative regret</summary>
+          <p>路由器面对模型池 M={m₁,...,mₘ} 和按顺序到达的任务流 T=(t₁,...,tₙ)。策略根据历史 hᵢ 在 M 个动作上产生分布 π(·|hᵢ)，实际选择 aᵢ。</p>
+          <ul>
+            <li><strong>Reward：</strong>rᵢ(aᵢ)=ε₁sᵢ(aᵢ)+ε₂κᵢ(aᵢ)，性能权重为正，成本权重为负。</li>
+            <li><strong>Reward matrix：</strong>Rᵢⱼ=ε₁sᵢⱼ+ε₂κᵢⱼ，保存任务 i 交给模型 j 的可比较收益。</li>
+            <li><strong>逐任务 oracle：</strong>aᵢ*=argmaxⱼRᵢⱼ，每一行都重新选最大值。</li>
+            <li><strong>单任务遗憾：</strong>δᵢ=rᵢ*−rᵢ(aᵢ)，累计遗憾是所有 δᵢ 之和。</li>
+          </ul>
+          <p>这套形式与 contextual multi-armed bandit 对应：Context 是 side information，Action 是拉动哪个模型臂，Feedback 是执行后 reward。</p>
+        </details>
+      </section>
+
+      <section id="system">
+        <span class="section-no">04 · 实例化</span>
+        <h2>ACRouter：决策、验证、记忆三件事必须同时在线</h2>
+        <p class="lead">ACRouter 是 C-A-F 的一个具体实现。Orchestrator 整合信息并选择模型，Verifier 通过执行产生新信息，Memory 把信息保留下来。三者缺一个，闭环都会退化。</p>
+
+        <figure class="figure">
+          <img src="imgs/acrouter-architecture.jpg" width="1258" height="590" loading="lazy" alt="论文图 2，ACRouter 的 Orchestrator、Verifier、Memory 和工具层架构">
+          <figcaption class="figure-body">
+            <p class="fig-caption"><strong>论文图 2：</strong>Orchestrator 做路由选择，Verifier 在沙箱中评价结果，Memory 保存历史，并通过工具层支持下一轮决策。</p>
+            <button class="fig-toggle" type="button" aria-expanded="false" aria-controls="fig2-detail">展开说明 ▸</button>
+            <div class="figure-detail" id="fig2-detail">
+              <ul>
+                <li><strong>Orchestrator：</strong>读取 DimensionBest 先验、Memory 中 top-10 相似任务和任务元数据，微调 Qwen3.5-0.8B 与启发式规则通过加权投票给出选择。</li>
+                <li><strong>Verifier：</strong>调用 AST 解析、沙箱执行、prompt 内测试和规则信号，把多个验证结果聚合为 0 到 1 的统一分数。</li>
+                <li><strong>Memory：</strong>用任务 embedding 建索引，记录所选模型、观察到的性能、成本和验证轨迹；余弦 kNN 的 k=10。</li>
+                <li><strong>工具层：</strong>候选模型、路由策略、检索、评估工具和执行基础设施并不是独立路由方法，而是闭环运行所需的共享能力。</li>
+                <li><strong>数据流：</strong>选择模型是 A，沙箱验证是 F，写回 Memory 后形成下一轮 C。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+
+        <div class="module-list">
+          <article class="module"><span class="tag">INTEGRATE</span><h3>Orchestrator 整合信息</h3><p>不是只看 prompt，而是组合静态先验、相似历史和元数据。</p><ul><li>Qwen3.5-0.8B 微调策略</li><li>启发式加权投票</li><li>top-10 历史邻居</li></ul></article>
+          <article class="module"><span class="tag">PRODUCE</span><h3>Verifier 产生信息</h3><p>避免模型自评，优先使用执行环境给出的外部信号。</p><ul><li>AST 与规则检查</li><li>沙箱执行</li><li>prompt 测试与 Judge</li></ul></article>
+          <article class="module"><span class="tag">ACCUMULATE</span><h3>Memory 积累信息</h3><p>让相似任务能看见过去成功和近期失败，粒度细于维度查表。</p><ul><li>embedding 向量库</li><li>FIFO 上限 20K</li><li>每次尝试后原位提交</li></ul></article>
+        </div>
+
+        <div class="deep-stack">
+          <details class="deep-card">
+            <summary><span class="deep-index">O</span><span class="deep-summary"><b>Orchestrator 到底看了哪些信号</b><span>维度先验、top-10 相似历史、任务元数据和多个 routing tool 共同投票。</span></span><span class="deep-state">整合 Context</span></summary>
+            <div class="deep-content"><p>核心 policy 是在 CodeRouterBench probing set 上微调的 Qwen3.5-0.8B。它不是单独做最终决定，而是与 DimensionBest、LogReg、Memory kNN 等工具形成 policy-as-voter。论文图 2 的示例中，不同 voter 分别选择 MiniMax-M2.7、GLM-5 和 Kimi-K2.5，最终按加权分数选择 Kimi-K2.5。</p></div>
+          </details>
+          <details class="deep-card">
+            <summary><span class="deep-index">V</span><span class="deep-summary"><b>Verifier 如何把异质任务压成统一分数</b><span>任务类型先决定可用工具集合，再将各工具分数按维度权重聚合到 0 到 1。</span></span><span class="deep-state">产生 Feedback</span></summary>
+            <div class="deep-content"><p>可执行任务优先使用 AST、编译、沙箱测试与 prompt 内测试。重构、理解、测试生成等无法完全依赖 pass@1 的维度，会结合代理指标和 LLM-as-Judge。统一分数 uᵢ 是这些工具分数的加权和，权重随任务维度变化。</p></div>
+          </details>
+          <details class="deep-card">
+            <summary><span class="deep-index">M</span><span class="deep-summary"><b>Memory 为什么不用“维度 → 最佳模型”字典</b><span>任务 embedding 能表达算法选择、API 模式和边界条件，粒度远细于维度标签。</span></span><span class="deep-state">更新 Context</span></summary>
+            <div class="deep-content"><p>Memory 的键来自 voyage-code-3 或 BGE-large embedding，值记录模型、性能、成本和验证轨迹。检索使用余弦相似度、阈值 0.5、k=10，FIFO 上限 20K。成功与近期失败都会被检索出来，因此 Orchestrator 不只知道“某模型通常擅长 bug fixing”，还可以知道“它在与当前 prompt 相似的 bug 上刚刚失败”。</p></div>
+          </details>
+        </div>
+
+        <details>
+          <summary>为什么普通 contextual bandit 还不够：它能在线更新，但上下文表达和决策机制更弱</summary>
+          <p>论文比较 LinUCB 和 LinTS。它们同样会根据 reward 在线更新，因此在 OOD 上比完全静态的分类器更稳。但它们使用每个模型独立的线性后验，Orchestrator 退化为 argmax，Memory 也没有 ACRouter 的任务级验证轨迹和语义检索。实验中，它们仍落后于完整闭环。</p>
+        </details>
+      </section>
+
+      <section id="benchmark">
+        <span class="section-no">05 · 评估环境</span>
+        <h2>CodeRouterBench 为什么必须是“任务流”</h2>
+        <p class="lead">一次性准确率只能回答某个路由器在固定样本上选得怎么样，无法回答它是否会从新反馈中变好。论文因此预先收集每个任务、每个模型的性能与成本，构造完整 outcome matrix，再让不同路由器在同一任务流上比较累计遗憾。</p>
+
+        <div class="benchmark-grid">
+          <div class="dataset-card">
+            <span class="eyebrow">统一观察矩阵</span>
+            <div class="dataset-stats">
+              <div class="dataset-stat"><b>10,111</b><span>总任务</span></div>
+              <div class="dataset-stat"><b>15+</b><span>来源 benchmark</span></div>
+              <div class="dataset-stat"><b>7,080</b><span>probing set</span></div>
+              <div class="dataset-stat"><b>2,919</b><span>ID test</span></div>
+            </div>
+            <div class="dimension-list" aria-label="九个 ID 编码维度">
+              <span>算法设计</span><span>缺陷修复</span><span>代码补全</span><span>代码生成</span><span>重构</span><span>理解</span><span>数据科学</span><span>多语言</span><span>测试生成</span>
+            </div>
+          </div>
+          <div class="ood-card">
+            <span class="eyebrow">真正拉开差距的 OOD</span>
+            <h3>176 个 agentic programming 任务</h3>
+            <p>这些任务要求多步规划、文件导航和迭代调试，与用于 probing 的 9 个单轮编码维度在性质上不同。</p>
+            <ul><li>Docker 沙箱执行</li><li>来自 SWE-bench Verified、LongCLI-Bench、FeatureBench、SWE-CI</li><li>用于检验静态先验遇到分布变化时是否失效</li></ul>
+          </div>
+        </div>
+
+        <h3>构建过程分成三阶段</h3>
+        <div class="phase-flow">
+          <div class="phase"><small>PHASE 1</small><b>统一任务</b><p>将 15+ benchmark 标准化为 10 个维度、10,111 个任务，并统一 prompt、环境和评分入口。</p></div>
+          <div class="phase"><small>PHASE 2</small><b>填满 outcome matrix</b><p>8 个候选模型分别回答任务，通过执行、代理指标与 Judge 得到每个 task × model 的分数和成本。</p></div>
+          <div class="phase"><small>PHASE 3</small><b>回放路由策略</b><p>Single Model、Random、Heuristic、Trained Policy、Bandit 与 ACRouter 在同一任务流和结果矩阵上比较。</p></div>
+        </div>
+
+        <details>
+          <summary>展开 10 个编码维度、数据来源和评分方式</summary>
+          <div class="comparison-wrap">
+            <table class="comparison-table dimension-table">
+              <thead><tr><th>维度</th><th>任务性质</th><th>来源</th><th>评分</th></tr></thead>
+              <tbody>
+                <tr><td>Code Generation</td><td>函数级合成</td><td>HumanEval+、MBPP+、BigCodeBench</td><td class="eval">Exec</td></tr>
+                <tr><td>Algorithm Design</td><td>竞赛式算法题</td><td>LiveCodeBench、BigCodeBench</td><td class="eval">Exec</td></tr>
+                <tr><td>Bug Fixing</td><td>定位并修复缺陷</td><td>DebugBench、SWE-bench Lite</td><td class="eval">Exec</td></tr>
+                <tr><td>Code Completion</td><td>Fill-in-the-middle 与输出预测</td><td>CRUXEval、HumanEval+ variants</td><td class="eval">Exec</td></tr>
+                <tr><td>Code Refactoring</td><td>改善代码质量</td><td>Bugs2Fix、CanItEdit</td><td class="eval">Proxy+</td></tr>
+                <tr><td>Data Science</td><td>数据分析 pipeline</td><td>DS-1000、BigCodeBench</td><td class="eval">Exec</td></tr>
+                <tr><td>Multi-Language</td><td>跨语言编程</td><td>HumanEval-X、MultiPL-E</td><td class="eval">Exec</td></tr>
+                <tr><td>Code Understanding</td><td>解释与摘要代码</td><td>CodeXGLUE Summarization</td><td class="eval">Proxy+</td></tr>
+                <tr><td>Test Generation</td><td>生成测试套件</td><td>LiveCodeBench、HumanEval+ variants</td><td class="eval">Proxy+</td></tr>
+                <tr><td>Agentic Programming</td><td>长时程、多文件仓库任务</td><td>SWE-bench Verified、LongCLI-Bench、FeatureBench、SWE-CI</td><td class="eval">Sandbox</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>Exec</strong> 是沙箱 pass@1，<strong>Proxy+</strong> 是代理指标并辅以 LLM-as-Judge，<strong>Sandbox</strong> 是补丁应用与测试执行。</p>
+        </details>
+
+        <details>
+          <summary>展开数据拆分：probing、ID test、OOD test 分别承担什么角色</summary>
+          <ul>
+            <li><strong>Probing，7,080：</strong>9 个单轮维度的 train 60% + val 10%，用于画像模型专长、训练分类器、校准 DimensionBest，并用 200 个 val 任务 warm-start ACRouter Memory。</li>
+            <li><strong>ID test，2,919：</strong>确定性的 MD5 30% 留出集，各维度 306 到 347 个任务，所有主表 ID 数字来自这里。</li>
+            <li><strong>OOD test，176：</strong>整个 agentic programming 维度被留出，任何路由器都看不到该维度 ground truth，用于测试根本不同的长时程任务。</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>展开成本口径：为什么自托管 0.8B 路由器按 $0.054/M tokens 计价</summary>
+          <p>论文在单张 H100 80GB 上用 SGLang 回放 2,919 个真实路由 prompt。300.5 秒稳态窗口处理 8,393,247 个输入 token 与 2,152,601 个输出 token，合计约 35,094 tokens/s。按每 GPU 小时 6.88 美元摊销，得到每百万组合 token 约 0.054 美元。候选 backend 仍按各自 API 价格计费。</p>
+        </details>
+
+        <figure class="figure">
+          <img src="imgs/model-performance-heatmap.jpg" width="704" height="533" loading="lazy" alt="论文图 4a，八个模型在九个编码维度上的性能热力图">
+          <figcaption class="figure-body">
+            <p class="fig-caption"><strong>论文图 4a：</strong>模型能力轮廓明显互补，9 个维度中有 5 个不同模型成为维度最佳。</p>
+            <button class="fig-toggle" type="button" aria-expanded="false" aria-controls="fig3-detail">展开说明 ▸</button>
+            <div class="figure-detail" id="fig3-detail">
+              <ul>
+                <li><strong>Claude Opus 4.6：</strong>平均性能最高，但并不统治每个维度。</li>
+                <li><strong>GLM-5：</strong>算法设计为 47.2%，相对 Opus 4.6 的 25.4% 高 86%。</li>
+                <li><strong>Qwen3-Max：</strong>测试生成为 82.7%，相对 Opus 4.6 的 39.2% 高 111%。</li>
+                <li><strong>Kimi-K2.5：</strong>数据科学为 18.4%，高于 Opus 4.6 的 14.2%。</li>
+                <li><strong>结论：</strong>候选池存在可利用的专长差异，同时强模型通常更贵，路由同时有质量和成本价值。</li>
+              </ul>
+            </div>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id="results">
+        <span class="section-no">06 · 结果</span>
+        <h2>闭环在分布变化时才显出真正价值</h2>
+        <p class="lead">ID 上，很多静态方法看起来接近 DimensionBest。到了全新的 agentic programming，依赖 frozen prior 的分类器大幅下跌，而能在线吸收反馈的方法保留更多能力。ACRouter 在两个任务流上都取得最低累计遗憾。</p>
+
+        <div class="result-switch">
+          <div class="result-panel">
+            <h3>ID test</h3><p>AvgPerf%，n=2,919</p>
+            <div class="result-row acr"><div class="result-head"><b>ACRouter</b><b>49.98</b></div><div class="result-track"><div class="result-fill" style="--w:87.68%"></div></div></div>
+            <div class="result-row"><div class="result-head"><b>DimensionBest</b><b>47.50</b></div><div class="result-track"><div class="result-fill" style="--w:83.33%"></div></div></div>
+            <div class="result-row"><div class="result-head"><b>LinUCB</b><b>46.84</b></div><div class="result-track"><div class="result-fill" style="--w:82.18%"></div></div></div>
+            <div class="result-row"><div class="result-head"><b>Always-Opus 4.6</b><b>43.83</b></div><div class="result-track"><div class="result-fill" style="--w:76.89%"></div></div></div>
+            <div class="regret-note"><span class="regret">205.5</span><span>ACRouter CumReg，低于 DimensionBest 277.4、LinUCB 296.9、Always-Opus 387.1</span></div>
+          </div>
+          <div class="result-panel ood">
+            <h3>OOD agentic test</h3><p>resolved rate / AvgPerf%，n=176</p>
+            <div class="result-row acr"><div class="result-head"><b>ACRouter</b><b>62.50</b></div><div class="result-track"><div class="result-fill" style="--w:82.36%"></div></div></div>
+            <div class="result-row"><div class="result-head"><b>Always-Opus 4.6</b><b>57.14</b></div><div class="result-track"><div class="result-fill" style="--w:75.29%"></div></div></div>
+            <div class="result-row"><div class="result-head"><b>Qwen3.5-0.8B FT</b><b>55.36</b></div><div class="result-track"><div class="result-fill" style="--w:72.95%"></div></div></div>
+            <div class="result-row"><div class="result-head"><b>LinUCB</b><b>49.82</b></div><div class="result-track"><div class="result-fill" style="--w:65.65%"></div></div></div>
+            <div class="regret-note"><span class="regret">17.0</span><span>ACRouter CumReg，低于 Always-Opus 26.7、Qwen FT 27.2、LinUCB 31.1</span></div>
+          </div>
+        </div>
+
+        <h3>静态分类器在 OOD 上不是小幅退化，而是结构性失效</h3>
+        <div class="comparison-wrap">
+          <table class="comparison-table">
+            <thead><tr><th>路由器</th><th>ID AvgPerf%</th><th>OOD AvgPerf%</th><th>OOD CumReg</th><th>信息状态</th></tr></thead>
+            <tbody>
+              <tr class="best"><td>ACRouter</td><td class="num">49.98</td><td class="num">62.50</td><td class="num">17.0</td><td>在线 Memory + sandbox feedback</td></tr>
+              <tr><td>LinUCB</td><td class="num">46.84</td><td class="num">49.82</td><td class="num">31.1</td><td>在线线性后验</td></tr>
+              <tr><td>RouteLLM-BERT</td><td class="num">47.22</td><td class="num">21.43</td><td class="num">59.4</td><td>冻结训练策略</td></tr>
+              <tr><td>LogReg</td><td class="num">47.26</td><td class="num">19.64</td><td class="num">61.8</td><td>冻结训练策略</td></tr>
+              <tr><td>Random</td><td class="num">38.75</td><td class="num">31.25</td><td class="num">50.4</td><td>无任务信息</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>轻量分类器在 ID 上与 DimensionBest 只差约 1.3 个百分点，但 OOD 只剩 8.93% 到 21.43%，甚至低于 Random 的 31.25%。论文将其解释为对 probing distribution 的过拟合，以及部署时无法获取新反馈。</p>
+
+        <details>
+          <summary>一个需要谨慎解释的附录结果：更新后的 GPT-5.4 单模型在同一 OOD split 上达到 75.00%</summary>
+          <p>附录 D.7 报告，更新后的 GPT-5.4 backend 单独解决 132/176 个任务，即 75.00%，高于主表中的 ACRouter 62.50%。这说明候选模型本身的代际进步仍可能带来更大绝对收益。C-A-F 的价值更适合被理解为：当模型池异质且会持续变化时，路由系统应该拥有从真实执行中更新选择依据的机制，而不是宣称路由永远胜过最新最强单模型。</p>
+        </details>
+
+        <h3>补充实验不是附属数字，它们在逐项排除替代解释</h3>
+        <div class="experiment-grid">
+          <div class="experiment"><small>C.1</small><h3>最强 coder ≠ 最强 router</h3><p>8 个 LLM 都作为零样本路由器测试。Qwen3.5-Plus 最好，Claude Opus 4.6 反而最后。</p><span class="range">46.87 vs 39.27</span></div>
+          <div class="experiment"><small>C.1</small><h3>Few-shot 不能稳定补信息</h3><p>3-shot 只改善部分模型，整体仍低于 DimensionBest，说明少量演示并不能替代系统性能先验。</p><span class="range">最高 46.03</span></div>
+          <div class="experiment"><small>C.2</small><h3>微调是门槛，规模不是</h3><p>Qwen3.5 从 0.8B 扫到 27B，微调后 AvgPerf 只波动约 0.5 点。</p><span class="range">46.21–46.74</span></div>
+        </div>
+
+        <details>
+          <summary>展开 8 个 LLM-as-a-Router sweep：为什么 Opus 写代码强，却不会零样本路由</summary>
+          <p>所有候选模型都收到同一个路由 prompt，要在 8 个 backend 中选择。零样本结果前五名为 Qwen3.5-Plus 46.87、Qwen3-Max 46.60、Kimi-K2.5 46.29、GPT-5.4 45.91、GLM-5 45.42；Claude Sonnet 4.6 为 41.41，Claude Opus 4.6 为 39.27。</p>
+          <p>3-shot 后最好的 GLM-5 也只有 46.03。论文因此强调：生成高质量代码的能力与估计“另一个模型在当前任务上会表现如何”的能力并不等价。</p>
+        </details>
+
+        <details>
+          <summary>展开 Qwen router scaling：30 倍参数规模为什么只带来约 0.5 点变化</summary>
+          <div class="comparison-wrap">
+            <table class="comparison-table">
+              <thead><tr><th>规模</th><th>AvgPerf%</th><th>Oracle gap%</th><th>tokens/task</th><th>CumReg</th></tr></thead>
+              <tbody><tr><td>0.8B</td><td class="num">46.41</td><td class="num">18.6</td><td class="num">500</td><td class="num">309.1</td></tr><tr><td>2B</td><td class="num">46.69</td><td class="num">18.1</td><td class="num">501</td><td>未保留逐任务日志</td></tr><tr><td>4B</td><td class="num">46.21</td><td class="num">18.9</td><td class="num">492</td><td>未保留逐任务日志</td></tr><tr><td>9B</td><td class="num">46.56</td><td class="num">18.3</td><td class="num">496</td><td>未保留逐任务日志</td></tr><tr><td>27B</td><td class="num">46.74</td><td class="num">18.0</td><td class="num">495</td><td>未保留逐任务日志</td></tr></tbody>
+            </table>
+          </div>
+          <p>未微调的 Qwen3.5 9B、27B、35B 会产生无法解析的路由 token，并回退到默认 Sonnet，AvgPerf 退化到 41.31。LoRA 微调后所有规模都超过 46.21，但扩大参数几乎不再提高效果。</p>
+        </details>
+
+        <details>
+          <summary>展开附录诊断：维度标签只解释约 27% 的逐任务最优模型信息</summary>
+          <div class="split-meter" aria-label="维度身份解释 27%，任务内容解释剩余 73%"><span>维度信息 27%</span><span>任务内容与细节 73%</span></div>
+          <p>论文计算 oracle 模型标签与任务维度之间的互信息。维度身份只能捕获约 27% 的标签熵，足以解释 DimensionBest 为什么能到约 0.475，却不足以追上 0.570 的逐任务 oracle。剩余信号位于具体算法、API 模式和边界条件中，这正是 embedding Memory 相比维度哈希要捕获的内容。</p>
+        </details>
+
+        <details>
+          <summary>展开三档部署成本：便宜分类器、适中闭环、昂贵固定模型分别在交换什么</summary>
+          <ul>
+            <li><strong>便宜档，约 7 到 8 美元：</strong>LogReg、RouteLLM、TF-IDF+MLP、Qwen3.5-0.8B FT，ID 性能接近 DimensionBest，Perf/$ 很强。</li>
+            <li><strong>适中档，约 10 到 13 美元：</strong>DimensionBest、ACRouter、online bandit。ACRouter 为 Memory 和 Verifier 付出额外成本，换取最高 AvgPerf 和更低 regret。</li>
+            <li><strong>昂贵档：</strong>Always-Opus 为 34.02 美元，却只有 43.83 ID AvgPerf；固定使用昂贵模型既没有逐任务专长匹配，也缺少成本调度。</li>
+          </ul>
+        </details>
+      </section>
+
+      <section id="examples">
+        <span class="section-no">07 · 实例层</span>
+        <h2>附录任务告诉我们：维度相同，也不代表最佳模型相同</h2>
+        <p class="lead">论文最后给出 10 个维度、每个维度两个任务的 prompt、模型输出、分数和路由决策。它们的作用不是展示更多 benchmark，而是把“逐任务路由”从抽象概念变成具体错误。</p>
+        <div class="depth-intro"><b>如何阅读实例</b><p>重点比较 DimensionBest、LLM 3-shot 与逐任务 Oracle 的选择。只要同一维度内 oracle 仍会换模型，就说明维度先验只能作为起点，不能替代任务内容。</p></div>
+
+        <div class="example-grid">
+          <article class="example-card"><span class="example-tag">BUG FIXING · PYTHON</span><h3>相同维度先验选 Opus，实际最佳是 Qwen3.5</h3><p>任务要求修复 Counter 运算和缩进问题。Opus、GPT-5.4 得分 0.89，Qwen3.5 得分 0.92。</p><div class="route-line"><b>选择</b><span>DimensionBest → Opus，3-shot → Opus，Oracle → Qwen3.5</span></div><span class="source-chip">Appendix F · bug_fixing_1</span></article>
+          <article class="example-card"><span class="example-tag">TEST GENERATION · PYTHON</span><h3>维度最佳和 3-shot 都没选中唯一得分模型</h3><p>为 string_sequence 生成测试。Opus 与 GPT-5.4 得分 0，Qwen3.5 得分 1.00。</p><div class="route-line"><b>选择</b><span>DimensionBest → GPT-5.4，3-shot → Opus，Oracle → Qwen3.5</span></div><span class="source-chip">Appendix F · test_generation_1</span></article>
+          <article class="example-card"><span class="example-tag">CODE REFACTORING · JAVA</span><h3>细节决定 GPT-5.4 还是 Opus 更合适</h3><p>第二个重构任务中，Opus 得分 0.75，GPT-5.4 为 0.61，Qwen3.5 为 0.14。维度查表仍选择 GPT-5.4。</p><div class="route-line"><b>选择</b><span>DimensionBest → GPT-5.4，3-shot → Opus，Oracle → Opus</span></div><span class="source-chip">Appendix F · code_refactoring_2</span></article>
+          <article class="example-card"><span class="example-tag">CODE COMPLETION · PYTHON</span><h3>一个简单输出预测也会暴露格式偏差</h3><p>任务只需预测 lower() 的输出。Opus 与 GPT-5.4 得分 1，Qwen3.5 因返回执行代码而不是目标输出得分 0。</p><div class="route-line"><b>选择</b><span>DimensionBest → Opus，3-shot → Opus，Oracle → Opus</span></div><span class="source-chip">Appendix F · code_completion_1</span></article>
+          <article class="example-card"><span class="example-tag">AGENTIC PROGRAMMING · PYTEST</span><h3>长时程任务需要补丁级能力，不只是生成函数</h3><p>任务要求让 pytest --fixtures 显示 fixture scope。Opus 得分 0.72，GPT-5.4 为 0.65，Qwen3.5 为 0.35。</p><div class="route-line"><b>选择</b><span>DimensionBest → Opus，3-shot → GPT-5.4，Oracle → Opus</span></div><span class="source-chip">Appendix F · agentic_programming_1</span></article>
+          <article class="example-card"><span class="example-tag">CODE UNDERSTANDING · PYTHON</span><h3>更长的解释不一定更接近摘要 ground truth</h3><p>任务 ground truth 只有“Generate form.”。Opus 得分 0.10，GPT-5.4 与 Qwen3.5 都为 0.05，显示代理评分任务与执行任务的反馈性质不同。</p><div class="route-line"><b>选择</b><span>DimensionBest → Opus，3-shot → Opus，Oracle → Opus</span></div><span class="source-chip">Appendix F · code_understanding_1</span></article>
+        </div>
+
+        <details>
+          <summary>展开全部 10 类任务的阅读索引：每类任务究竟在测什么</summary>
+          <ul>
+            <li><strong>Code Generation：</strong>根据自然语言或函数签名生成可执行实现。</li>
+            <li><strong>Algorithm Design：</strong>需要算法选择、复杂度判断和边界处理。</li>
+            <li><strong>Bug Fixing：</strong>在已有代码中定位语法、逻辑或 API 缺陷。</li>
+            <li><strong>Code Completion：</strong>补全局部代码或预测给定程序输出。</li>
+            <li><strong>Code Refactoring：</strong>在保留语义的同时改善结构或修复实现，使用 Proxy+ 评分。</li>
+            <li><strong>Data Science：</strong>处理 pandas、matplotlib 与分析 pipeline，强调库调用细节。</li>
+            <li><strong>Multi-Language：</strong>覆盖 JavaScript、TypeScript 等不同语言语法与惯用法。</li>
+            <li><strong>Code Understanding：</strong>生成代码摘要，结果依赖代理指标与 Judge。</li>
+            <li><strong>Test Generation：</strong>生成能覆盖行为和边界条件的测试套件。</li>
+            <li><strong>Agentic Programming：</strong>在真实仓库中导航文件、修改补丁、运行测试并迭代调试。</li>
+          </ul>
+        </details>
+      </section>
+
+      <section id="practice">
+        <span class="section-no">08 · 怎么用</span>
+        <h2>实践上，不必第一天就上完整 ACRouter</h2>
+        <p class="lead">论文附录给出的建设路径很务实：先建立可验证的 task × model 数据，再根据分布稳定性和预算逐步升级路由器。</p>
+        <div class="takeaway-grid">
+          <div class="takeaway"><b>阶段 1：DimensionBest</b><p>先用 probing set 建维度 × 模型性能矩阵。静态查表几乎没有运行开销，论文称它达到约 83% 的 oracle AvgPerf。</p></div>
+          <div class="takeaway"><b>阶段 2：轻量分类器</b><p>如果分布稳定且更重视 Perf/$，LogReg、RouteLLM 等能以较低成本接近 DimensionBest。</p></div>
+          <div class="takeaway"><b>阶段 3：闭合 C-A-F</b><p>如果会遇到新任务分布，就启用 Verifier 和在线 Memory，让每次执行结果真正改变未来选择。</p></div>
+        </div>
+
+        <h3>这篇论文最值得带走的泛化</h3>
+        <p>C-A-F 并不只适用于模型路由。只要系统需要在多个选项中反复决策，而且结果可以被外部验证，就可以把同一结构迁移到<strong>工具选择、API endpoint、prompt 策略、思考预算、skill 路由或 sub-agent 路由</strong>。</p>
+
+        <div class="limits">
+          <div class="limit"><b>成本数字只能相对看</b><p>供应商 cache hit 不可观测，论文按公开 token 价格和测量用量估算美元成本。</p></div>
+          <div class="limit"><b>OOD 预算被截短</b><p>agentic programming 使用 40 步上限，而不是标准 250 步，以控制实验预算。</p></div>
+          <div class="limit"><b>当前 Memory 不是唯一解</b><p>论文实现是 LLM policy + embedding kNN，参数级或更高级记忆仍未探索。</p></div>
+          <div class="limit"><b>Verifier 决定学习质量</b><p>如果反馈信号无法可靠反映任务成功，闭环也会把噪声写入 Memory。</p></div>
+        </div>
+      </section>
+
+      <div class="closing">
+        <p>更大的路由模型不一定更会路由。论文的补充实验甚至发现，最强 coder 可能是很差的零样本 router。真正关键的是：系统能否把<strong>经过执行验证的经验</strong>，变成下一次决策可检索的上下文。</p>
+      </div>
+
+      <footer>
+        <p>原文：Pengfei Zhou 等，<a href="https://arxiv.org/abs/2606.22902v3" target="_blank" rel="noreferrer"><span lang="en">Agent-as-a-Router: Agentic Model Routing for Coding Tasks</span></a>，arXiv preprint，v3。</p>
+        <p>内容来源说明：论文 PDF 使用 GLM-OCR 识别，页面中的论文事实、数字、公式释义和图片均来自本地 OCR Markdown、JSON 与裁剪图。未使用 arXiv 摘要、HTML 版、项目主页或二手材料补充正文。</p>
+        <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh">
+          <span class="production-label">制作信息</span>
+          <span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span>
+          <span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span>
+        </p>
+      </footer>
+    </article>
+
+    <aside class="toc" aria-label="文章目录">
+      <strong>阅读路径</strong>
+      <a href="#problem">01 静态路由的问题</a>
+      <a href="#taxonomy">02 五类策略谱系</a>
+      <a href="#loop">03 C-A-F 闭环</a>
+      <a href="#system">04 ACRouter 架构</a>
+      <a href="#benchmark">05 CodeRouterBench</a>
+      <a href="#results">06 主结果与补充实验</a>
+      <a href="#examples">07 具体任务实例</a>
+      <a href="#practice">08 实践与边界</a>
+    </aside>
+  </main>
+
+  <script>
+    document.querySelectorAll('.fig-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const detail = document.getElementById(button.getAttribute('aria-controls'));
+        const open = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!open));
+        detail.classList.toggle('active', !open);
+        button.textContent = open ? '展开说明 ▸' : '收起说明 ▴';
+      });
+    });
+
+    const progress = document.getElementById('readingProgress');
+    const updateProgress = () => {
+      const root = document.documentElement;
+      const max = root.scrollHeight - root.clientHeight;
+      const value = max > 0 ? (root.scrollTop / max) * 100 : 0;
+      progress.style.width = `${Math.min(100, Math.max(0, value))}%`;
+    };
+    document.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+  </script>
+</body>
+</html>
