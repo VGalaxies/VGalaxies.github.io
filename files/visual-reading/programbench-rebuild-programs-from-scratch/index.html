@@ -381,6 +381,12 @@
       color: var(--muted);
       font-size: .9rem;
     }
+    .production-meta { --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep, #f4ead7))); --production-ink: var(--ink, #25211c); --production-muted: var(--muted, #6f675d); --production-line: var(--line, #dacdb8); display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 1rem 0 0; }
+    .production-label { margin-right: .1rem; color: var(--production-muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+    .production-chip { display: inline-flex; align-items: baseline; gap: .38rem; padding: .22rem .58rem; background: var(--production-surface); border-radius: 999px; line-height: 1.35; }
+    .production-key { color: var(--production-muted); font-size: .68rem; letter-spacing: .04em; }
+    .production-value { color: var(--production-ink); font-family: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace; font-size: .72rem; font-weight: 650; }
+    .production-divider { width: 1px; height: 1.1rem; margin: 0 .1rem; background: var(--production-line); }
 
     @media (max-width: 880px) {
       .layout { display: block; padding-top: 2rem; }
@@ -657,7 +663,7 @@
 
       <footer>
         <p>原文：<a href="https://arxiv.org/pdf/2605.03546">ProgramBench: Can Language Models Rebuild Programs From Scratch?</a> · arXiv · 2026.05。页面中的论文图来自 <a href="https://arxiv.org/html/2605.03546v1">arXiv HTML</a>，已使用 HTTP 200 图片链接。</p>
-        <p class="production-meta" data-llm-model="GPT-5.5" data-llm-effort="xhigh"><strong>制作信息</strong> · LLM：GPT-5.5 · effort：xhigh</p>
+        <p class="production-meta" data-llm-model="GPT-5.5" data-llm-effort="xhigh"><span class="production-label">制作信息</span><span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.5</span></span><span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span></p>
       </footer>
     </article>
 

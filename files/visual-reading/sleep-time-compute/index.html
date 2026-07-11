@@ -497,6 +497,12 @@
       font-size: .9rem;
     }
     footer a { color: var(--muted); border-bottom: 1px solid currentColor; }
+    .production-meta { --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep, #f4ead7))); --production-ink: var(--ink, #25211c); --production-muted: var(--muted, #6f675d); --production-line: var(--line, #dacdb8); display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 1rem 0 0; }
+    .production-label { margin-right: .1rem; color: var(--production-muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+    .production-chip { display: inline-flex; align-items: baseline; gap: .38rem; padding: .22rem .58rem; background: var(--production-surface); border-radius: 999px; line-height: 1.35; }
+    .production-key { color: var(--production-muted); font-size: .68rem; letter-spacing: .04em; }
+    .production-value { color: var(--production-ink); font-family: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace; font-size: .72rem; font-weight: 650; }
+    .production-divider { width: 1px; height: 1.1rem; margin: 0 .1rem; background: var(--production-line); }
 
     @media (max-width: 880px) {
       .layout { display: block; padding-top: 2rem; }
@@ -763,7 +769,7 @@
       <footer>
         <p>本页为「可视化阅读」笔记，内容与数据以原文为准。</p>
         <p>原文：<a href="https://www.context.ai/blog/sleep-time-compute">Sleep-time compute</a> · Context（context.ai）</p>
-        <p class="production-meta" data-llm-model="Opus 4.8" data-llm-effort="xhigh"><strong>制作信息</strong> · LLM：Opus 4.8 · effort：xhigh</p>
+        <p class="production-meta" data-llm-model="Opus 4.8" data-llm-effort="xhigh"><span class="production-label">制作信息</span><span class="production-chip"><span class="production-key">LLM</span><span class="production-value">Opus 4.8</span></span><span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span></p>
       </footer>
     </article>
 
