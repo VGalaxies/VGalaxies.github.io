@@ -5,80 +5,141 @@
 #   title        - 列表卡片标题
 #   date         - YYYY-MM-DD
 #   source_type  - paper 或 blog
+#   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
   - slug: agent-harness-should-repair-itself
     title: 'Agent Harness 不该只记录失败，还要把失败变成免疫力'
     date: 2026-07-12
     source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Harness Engineering'
+      - 'Reliability'
     source_url: 'https://x.com/akshay_pachaar/status/2064051835636498924'
   - slug: deepseek-large-scale-ep
     title: 'SGLang 怎么在 96 张 H100 上拆开 DeepSeek 推理瓶颈'
     date: 2026-07-12
     source_type: blog
+    tags:
+      - 'Inference Systems'
+      - 'Distributed Systems'
+      - 'DeepSeek'
     source_url: 'https://www.lmsys.org/blog/2025-05-05-large-scale-ep/'
   - slug: agent-as-a-router
     title: 'Agent-as-a-Router 怎么从执行反馈中学会选模型'
     date: 2026-07-12
     source_type: paper
+    tags:
+      - 'Agent Systems'
+      - 'Model Routing'
+      - 'Online Learning'
     source_url: 'https://arxiv.org/pdf/2606.22902v3'
   - slug: finding-your-unknowns
     title: 'Agent 做得越多，越要先找到自己的未知项'
     date: 2026-07-12
     source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Metacognition'
+      - 'Planning'
     source_url: 'https://x.com/trq212/status/2073100352921215386'
   - slug: ai-efficiency-gain-illusion
     title: '简单任务用 AI 为什么越用越多却没省时间'
     date: 2026-07-12
     source_type: paper
+    tags:
+      - 'Human-AI Interaction'
+      - 'Productivity'
+      - 'Behavioral Research'
     source_url: 'https://arxiv.org/abs/2605.22687v1'
   - slug: agentic-code-review
     title: 'Agent 写代码越快，为什么审查越重要'
     date: 2026-07-12
     source_type: blog
+    tags:
+      - 'Agentic Coding'
+      - 'Code Review'
+      - 'Software Engineering'
     source_url: 'https://addyosmani.com/blog/agentic-code-review/'
   - slug: claude-code-loop-patterns
     title: 'Claude Code 的四类 loop 怎么选'
     date: 2026-07-12
     source_type: blog
+    tags:
+      - 'Claude Code'
+      - 'Agent Loops'
+      - 'Workflow'
     source_url: 'https://x.com/ClaudeDevs/status/2074208949205881033'
   - slug: trustworthy-agent-benchmarks
     title: 'AI Agent benchmark 怎么被刷出虚假高分'
     date: 2026-07-12
     source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Evaluation'
+      - 'Reliability'
     source_url: 'https://moogician.github.io/blog/2026/trustworthy-benchmarks-cont/'
   - slug: working-with-ai-understanding-architecture
     title: '会用 AI 修 Bug，为什么还得懂架构'
     date: 2026-07-11
     source_type: blog
+    tags:
+      - 'Agentic Coding'
+      - 'Architecture'
+      - 'Debugging'
     source_url: 'https://htmx.org/essays/working-with-ai/'
   - slug: harness-agent-self-improvement
     title: 'Harness 怎么让 Agent 学会改进自己'
     date: 2026-07-11
     source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Harness Engineering'
+      - 'Self-improvement'
     source_url: 'https://lilianweng.github.io/posts/2026-07-04-harness/'
   - slug: llm-mirror-test-corrupt-own-output
     title: '偷偷改掉 LLM 说过的话看它认不认得出'
     date: 2026-07-11
     source_type: blog
+    tags:
+      - 'LLM Behavior'
+      - 'Self-recognition'
+      - 'Evaluation'
     source_url: 'https://blog.pascalschuster.de/article/do-llms-pass-the-mirror-test'
   - slug: sleep-time-compute
     title: 'Context 怎么让 agent 在睡觉时学习'
     date: 2026-07-11
     source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Context Engineering'
+      - 'Test-time Compute'
     source_url: 'https://www.context.ai/blog/sleep-time-compute'
   - slug: seer-online-context-learning-rl
     title: 'Seer 怎么把同步 RL 的 rollout 提速一倍'
     date: 2026-07-10
     source_type: paper
+    tags:
+      - 'Reinforcement Learning'
+      - 'Rollout Systems'
+      - 'Online Learning'
     source_url: 'https://arxiv.org/pdf/2511.14617'
   - slug: post-training-distributional-view
     title: 'SFT、RL、OPD 为什么都绕不开 on-policy 数据'
     date: 2026-05-20
     source_type: blog
+    tags:
+      - 'Post-training'
+      - 'Reinforcement Learning'
+      - 'SFT'
     source_url: 'https://nrehiew.github.io/blog/sft_rl_opd/'
   - slug: programbench-rebuild-programs-from-scratch
     title: 'ProgramBench 怎么测从零重建程序'
     date: 2026-05-20
     source_type: paper
+    tags:
+      - 'Program Synthesis'
+      - 'Evaluation'
+      - 'Software Engineering'
     source_url: 'https://arxiv.org/pdf/2605.03546'

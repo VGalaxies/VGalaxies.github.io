@@ -1,39 +1,63 @@
 ---
-layout: page
+layout: default
 title: Visual Reading
 permalink: /visual-reading/
 ---
 
-把读过的论文 / 博客 / 长文做成单页可视化笔记。新的在前。
+<a class="vr-skip" href="#main-content">跳到主要内容</a>
 
-<style>
-  .vr-list { list-style: none; padding: 0; margin: 2rem 0; }
-  .vr-list li { padding: 1rem 0; border-bottom: 1px solid #e8dcc7; }
-  .vr-list li:last-child { border-bottom: none; }
-  .vr-title { font-size: 1.1rem; font-weight: 600; color: #2a1d10; text-decoration: none; }
-  .vr-title:hover { color: #8a5a1e; text-decoration: underline; }
-  .vr-meta { font-size: 0.85rem; color: #7a6a55; margin-top: 0.3rem; }
-  .vr-meta a { color: #8a5a1e; text-decoration: none; }
-  .vr-meta a:hover { text-decoration: underline; }
-  .vr-tag { display: inline-block; padding: 0.05rem 0.5rem; background: #f4ead7; color: #6a4a1e; border-radius: 3px; font-size: 0.75rem; margin-right: 0.4rem; }
-  .vr-empty { color: #7a6a55; font-style: italic; }
-</style>
-
-{% if site.data.visual_reading.entries.size > 0 %}
-<ul class="vr-list">
-{% for entry in site.data.visual_reading.entries %}
-  <li>
-    <a class="vr-title" href="{{ '/files/visual-reading/' | append: entry.slug | append: '/' | relative_url }}">{{ entry.title }}</a>
-    <div class="vr-meta">
-      <span class="vr-tag">{{ entry.source_type | default: "blog" }}</span>
-      <span>{{ entry.date }}</span>
-      {% if entry.source_url %}
-        · <a href="{{ entry.source_url }}" target="_blank" rel="noopener">原文 ↗</a>
-      {% endif %}
+<main class="vr-shell vr-catalog" id="main-content">
+  <header class="vr-catalog-hero">
+    <a class="vr-back-link" href="{{ '/' | relative_url }}"><span aria-hidden="true">←</span> VGalaxies</a>
+    <div class="vr-catalog-heading">
+      <div>
+        <p class="vr-kicker"><span class="vr-signal-dot" aria-hidden="true"></span> Signal archive / updated continuously</p>
+        <h1>阅读星图</h1>
+      </div>
+      <div class="vr-catalog-stats" aria-label="目录统计">
+        <strong>{{ site.data.visual_reading.entries.size }}</strong>
+        <span>notes<br>in orbit</span>
+      </div>
     </div>
-  </li>
-{% endfor %}
-</ul>
-{% else %}
-<p class="vr-empty">还没有条目。</p>
-{% endif %}
+    <p class="vr-catalog-intro">把读过的论文、博客和长文做成单页可视化笔记。按主题筛选，从任意一个信号进入。</p>
+  </header>
+
+  {% assign all_tags = site.data.visual_reading.entries | map: "tags" | join: "," | split: "," | uniq | sort %}
+  <section class="vr-filter-panel" aria-label="按主题筛选笔记">
+    <span class="vr-filter-label">FILTER SIGNAL</span>
+    <div class="vr-filters" role="group" aria-label="主题">
+      <button class="vr-filter is-active" type="button" data-filter="all" aria-pressed="true">全部</button>
+      {% for tag in all_tags %}
+      {% assign clean_tag = tag | strip %}
+      {% if clean_tag != "" %}<button class="vr-filter" type="button" data-filter="{{ clean_tag | escape }}" aria-pressed="false">{{ clean_tag | escape }}</button>{% endif %}
+      {% endfor %}
+    </div>
+    <p class="vr-filter-status" aria-live="polite"><span data-visible-count>{{ site.data.visual_reading.entries.size }}</span> / {{ site.data.visual_reading.entries.size }} signals visible</p>
+  </section>
+
+  {% if site.data.visual_reading.entries.size > 0 %}
+  <ol class="vr-list">
+  {% for entry in site.data.visual_reading.entries %}
+    <li class="vr-entry" data-tags="{{ entry.tags | join: '|' | escape }}" style="--entry-index: {{ forloop.index0 }}">
+      <span class="vr-entry-index" aria-hidden="true">{% if forloop.index < 10 %}0{% endif %}{{ forloop.index }}</span>
+      <article>
+        <div class="vr-entry-topline">
+          <span class="vr-type"><span aria-hidden="true"></span>{{ entry.source_type | default: "blog" }}</span>
+          <time datetime="{{ entry.date }}">{{ entry.date }}</time>
+        </div>
+        <h2><a href="{{ '/files/visual-reading/' | append: entry.slug | append: '/' | relative_url }}">{{ entry.title }} <span aria-hidden="true">↗</span></a></h2>
+        <div class="vr-entry-footer">
+          <div class="vr-entry-tags" aria-label="主题标签">
+            {% for tag in entry.tags %}<button type="button" data-filter-tag="{{ tag | escape }}">{{ tag | escape }}</button>{% endfor %}
+          </div>
+          {% if entry.source_url %}<a class="vr-source-link" href="{{ entry.source_url }}" target="_blank" rel="noopener">原文 <span aria-hidden="true">↗</span></a>{% endif %}
+        </div>
+      </article>
+    </li>
+  {% endfor %}
+  </ol>
+  <p class="vr-empty" data-empty hidden>这条轨道上还没有笔记。换一个 tag 试试。</p>
+  {% else %}
+  <p class="vr-empty">还没有条目。</p>
+  {% endif %}
+</main>
