@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Carson Gross《Working With AI: A Concrete Example》中文可视化阅读笔记：从 hyperscript 解析器回归，看 AI 为什么擅长调查与测试，却仍需要理解架构的人来控制复杂度。">
+  <title>会用 AI 修 Bug，为什么还得懂架构？</title>
+  <style>
+    :root {
+      --canvas: oklch(96.8% 0.018 78);
+      --paper: oklch(98.6% 0.010 78);
+      --paper-2: oklch(93.8% 0.030 75);
+      --paper-3: oklch(89.2% 0.044 70);
+      --ink: oklch(24% 0.022 52);
+      --ink-soft: oklch(39% 0.028 52);
+      --muted: oklch(52% 0.020 55);
+      --line: oklch(83% 0.040 70);
+      --accent: oklch(48% 0.105 43);
+      --accent-dark: oklch(39% 0.100 42);
+      --accent-soft: oklch(91% 0.050 62);
+      --shadow: 0 1px 2px rgba(68, 45, 24, .10), 0 10px 32px rgba(68, 45, 24, .06);
+      --r-xs: 4px;
+      --r-sm: 8px;
+      --r-md: 14px;
+      --r-lg: 24px;
+      --r-pill: 999px;
+      --max: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.76;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: var(--accent-dark); text-decoration-thickness: 1px; text-underline-offset: .18em; }
+    a:hover { color: var(--accent); }
+    p { margin: 0 0 1rem; text-wrap: pretty; }
+    strong { font-weight: 760; }
+    code, pre, .mono {
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+    }
+    code {
+      padding: .08em .32em;
+      background: var(--paper-2);
+      border-radius: var(--r-xs);
+      font-size: .9em;
+    }
+    button, summary, a { touch-action: manipulation; }
+    button, summary { font: inherit; }
+    button:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--accent) 34%, transparent);
+      outline-offset: 3px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: color-mix(in oklch, var(--canvas) 94%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 78%, transparent);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Noto Serif SC", "Source Han Serif SC", "STSong", "Songti SC", Georgia, serif;
+      font-size: .95rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .top-links { display: flex; align-items: center; gap: .5rem; }
+    .top-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .78rem;
+      color: var(--muted);
+      border-radius: var(--r-pill);
+      font-size: .8rem;
+      text-decoration: none;
+    }
+    .top-link.source { color: var(--paper); background: var(--ink); }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 206px;
+      gap: 4rem;
+      padding: 4.5rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.4rem;
+      align-self: start;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .toc-label {
+      margin: 0 0 .7rem;
+      color: var(--ink-soft);
+      font-size: .68rem;
+      font-weight: 780;
+      letter-spacing: .12em;
+    }
+    .toc a {
+      display: block;
+      min-height: 38px;
+      padding: .5rem .7rem;
+      color: var(--muted);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 68%, transparent);
+      text-decoration: none;
+      line-height: 1.35;
+    }
+    .toc a.active { color: var(--accent-dark); font-weight: 720; }
+
+    .hero {
+      position: relative;
+      padding: 0 0 4.2rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .hero::after {
+      content: "as";
+      position: absolute;
+      right: 1rem;
+      bottom: -2.6rem;
+      color: color-mix(in oklch, var(--accent) 13%, transparent);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: clamp(6rem, 17vw, 12rem);
+      font-weight: 800;
+      letter-spacing: -.08em;
+      line-height: .8;
+      pointer-events: none;
+      user-select: none;
+    }
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem 1rem;
+      margin-bottom: 1.3rem;
+      color: var(--accent-dark);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 {
+      font-family: "Noto Serif SC", "Source Han Serif SC", "STSong", "Songti SC", Georgia, serif;
+      text-wrap: balance;
+    }
+    h1 {
+      max-width: 820px;
+      margin: 0 0 1.4rem;
+      font-size: clamp(2.65rem, 6.8vw, 5.9rem);
+      font-weight: 760;
+      letter-spacing: -.045em;
+      line-height: .98;
+    }
+    .hero-deck {
+      max-width: 700px;
+      margin: 0 0 1.8rem;
+      color: var(--ink-soft);
+      font-size: clamp(1.05rem, 2vw, 1.28rem);
+      line-height: 1.7;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .6rem 1.2rem;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .hero-meta a { font-weight: 700; }
+
+    .tldr {
+      position: relative;
+      z-index: 1;
+      margin: 3.2rem 0 0;
+      padding: 1.35rem 1.5rem 1.45rem;
+      background: var(--paper);
+      border-radius: var(--r-md);
+      box-shadow: var(--shadow);
+    }
+    .tldr-label {
+      margin-bottom: .65rem;
+      color: var(--accent-dark);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .10em;
+    }
+    .tldr p { margin: 0; font-size: 1.04rem; }
+
+    section {
+      padding: 5rem 0;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 4.5rem;
+    }
+    .section-no {
+      display: inline-block;
+      margin-bottom: .7rem;
+      color: var(--accent-dark);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+    }
+    h2 {
+      max-width: 760px;
+      margin: 0 0 1.1rem;
+      font-size: clamp(2rem, 4vw, 3.35rem);
+      letter-spacing: -.025em;
+      line-height: 1.12;
+    }
+    h3 { margin: 0 0 .6rem; font-size: 1.28rem; letter-spacing: -.012em; line-height: 1.3; }
+    .lead { max-width: 760px; color: var(--ink-soft); font-size: 1.08rem; }
+
+    .bug-code {
+      margin: 2rem 0 1rem;
+      padding: 1.35rem 1.45rem;
+      overflow-x: auto;
+      color: oklch(91% 0.016 75);
+      background: oklch(24% 0.022 52);
+      border-radius: var(--r-md);
+      box-shadow: var(--shadow);
+      font-size: clamp(.76rem, 1.7vw, .95rem);
+      line-height: 1.8;
+    }
+    .token-as {
+      display: inline-block;
+      padding: 0 .42rem;
+      color: oklch(23% 0.030 48);
+      background: oklch(80% 0.115 64);
+      border-radius: var(--r-xs);
+      font-weight: 850;
+    }
+    .binding-note {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      margin-bottom: 2rem;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .binding-note::before { content: "↳"; color: var(--accent); font-size: 1.2rem; }
+
+    .parser-lab {
+      padding: 1.5rem;
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .lab-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.3rem;
+    }
+    .lab-title { margin: 0; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .78rem; font-weight: 800; }
+    .segmented {
+      display: inline-flex;
+      padding: 3px;
+      background: var(--paper-2);
+      border-radius: var(--r-pill);
+    }
+    .segment {
+      min-height: 40px;
+      padding: .45rem .8rem;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+      font-size: .76rem;
+      font-weight: 720;
+      transition-property: transform, background-color, color;
+      transition-duration: 160ms;
+    }
+    .segment:active { transform: scale(.96); }
+    .segment.active { color: var(--paper); background: var(--ink); }
+    .parse-track {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: .75rem;
+      align-items: stretch;
+    }
+    .parse-box {
+      min-height: 138px;
+      padding: 1rem;
+      background: var(--paper-2);
+      border-radius: var(--r-sm);
+      transition-property: transform, opacity, background-color;
+      transition-duration: 220ms;
+    }
+    .parse-box.dim { opacity: .46; transform: translateY(4px); }
+    .parse-box.hot { background: var(--accent-soft); }
+    .parse-kicker { margin-bottom: .45rem; color: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .65rem; font-weight: 760; }
+    .parse-box strong { display: block; margin-bottom: .35rem; }
+    .parse-box p { margin: 0; color: var(--ink-soft); font-size: .84rem; line-height: 1.6; }
+    .parse-arrow { align-self: center; color: var(--accent); font-size: 1.5rem; }
+    .lab-caption { min-height: 3.2rem; margin: 1rem 0 0; color: var(--ink-soft); font-size: .86rem; }
+
+    .cause-chain {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .7rem;
+      margin-top: 2rem;
+    }
+    .cause-step { position: relative; min-height: 170px; padding: 1rem; background: var(--paper); border-radius: var(--r-sm); box-shadow: 0 1px 3px rgba(68,45,24,.09); }
+    .cause-step:not(:last-child)::after { content: "→"; position: absolute; right: -.62rem; top: 42%; z-index: 2; color: var(--accent); font-weight: 850; }
+    .cause-num { display: block; margin-bottom: 1rem; color: var(--accent-dark); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .68rem; font-weight: 850; }
+    .cause-step strong { display: block; margin-bottom: .4rem; }
+    .cause-step p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+
+    .fix-studio { margin-top: 2.2rem; }
+    .fix-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: .55rem; margin-bottom: 1rem; }
+    .fix-tab {
+      min-height: 70px;
+      padding: .72rem .8rem;
+      color: var(--muted);
+      background: color-mix(in oklch, var(--paper) 78%, transparent);
+      border: 1px solid color-mix(in oklch, var(--line) 76%, transparent);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      text-align: left;
+      transition-property: transform, background-color, color, border-color;
+      transition-duration: 170ms;
+    }
+    .fix-tab:active { transform: scale(.97); }
+    .fix-tab.active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+    .fix-tab small { display: block; margin-bottom: .18rem; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .62rem; opacity: .75; }
+    .fix-tab span { font-weight: 760; }
+    .fix-panel {
+      min-height: 365px;
+      padding: clamp(1.3rem, 3vw, 2rem);
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .fix-panel[hidden] { display: none; }
+    .fix-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(230px, .65fr); gap: 2rem; }
+    .fix-verdict { display: inline-flex; align-items: center; min-height: 32px; padding: .2rem .65rem; margin-bottom: .8rem; color: var(--accent-dark); background: var(--accent-soft); border-radius: var(--r-pill); font-size: .68rem; font-weight: 800; }
+    .fix-panel pre { margin: 1rem 0 0; padding: 1rem; overflow-x: auto; color: oklch(91% 0.014 75); background: var(--ink); border-radius: var(--r-sm); font-size: .78rem; line-height: 1.65; }
+    .scope-card { padding: 1rem; background: var(--paper-2); border-radius: var(--r-sm); }
+    .scope-card + .scope-card { margin-top: .7rem; }
+    .scope-card b { display: block; margin-bottom: .35rem; font-size: .76rem; }
+    .scope-card p { margin: 0; color: var(--ink-soft); font-size: .8rem; line-height: 1.55; }
+    .scope-meter { display: flex; gap: .28rem; margin-top: .65rem; }
+    .scope-meter i { width: 25%; height: 7px; background: color-mix(in oklch, var(--line) 78%, transparent); border-radius: var(--r-pill); }
+    .scope-meter i.on { background: var(--accent); }
+
+    .division {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) 1px minmax(0, 1.1fr);
+      gap: 2rem;
+      margin-top: 2.2rem;
+      padding: 2rem;
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .division-line { background: var(--line); }
+    .role-label { margin-bottom: .5rem; color: var(--accent-dark); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .68rem; font-weight: 800; letter-spacing: .08em; }
+    .role-list { margin: 1rem 0 0; padding: 0; list-style: none; }
+    .role-list li { position: relative; padding: .72rem 0 .72rem 1.4rem; border-top: 1px solid color-mix(in oklch, var(--line) 70%, transparent); }
+    .role-list li::before { content: "•"; position: absolute; left: .2rem; color: var(--accent); font-size: 1.1rem; }
+    .role-list strong { display: block; }
+    .role-list span { color: var(--muted); font-size: .82rem; }
+
+    .warning-equation {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1.2fr;
+      gap: .6rem;
+      align-items: center;
+      margin-top: 2rem;
+      padding: 1.2rem;
+      background: var(--paper-2);
+      border-radius: var(--r-md);
+      text-align: center;
+    }
+    .warning-equation strong { display: block; font-family: "Noto Serif SC", "Source Han Serif SC", "STSong", "Songti SC", serif; font-size: 1.08rem; }
+    .warning-equation span { color: var(--muted); font-size: .72rem; }
+    .operator { color: var(--accent); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 850; }
+
+    .checklist { margin-top: 2rem; }
+    .check-item { border-top: 1px solid var(--line); }
+    .check-item:last-child { border-bottom: 1px solid var(--line); }
+    .check-item summary {
+      min-height: 68px;
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) auto;
+      gap: .8rem;
+      align-items: center;
+      padding: .9rem .2rem;
+      cursor: pointer;
+      list-style: none;
+    }
+    .check-item summary::-webkit-details-marker { display: none; }
+    .check-no { color: var(--accent-dark); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .7rem; font-weight: 800; }
+    .check-copy strong { display: block; }
+    .check-copy span { display: block; color: var(--muted); font-size: .79rem; line-height: 1.45; }
+    .check-plus { color: var(--accent); font-size: 1.25rem; transition: transform 160ms cubic-bezier(.16,1,.3,1); }
+    .check-item[open] .check-plus { transform: rotate(45deg); }
+    .check-body { padding: 0 3rem 1.1rem 3rem; color: var(--ink-soft); font-size: .9rem; }
+
+    .age-balance {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1rem;
+      align-items: stretch;
+      margin-top: 2rem;
+    }
+    .balance-side { padding: 1.25rem; background: var(--paper); border-radius: var(--r-md); box-shadow: 0 1px 3px rgba(68,45,24,.09); }
+    .balance-side h3 { font-size: 1.15rem; }
+    .balance-side ul { margin: .8rem 0 0; padding-left: 1.2rem; color: var(--ink-soft); }
+    .balance-side li + li { margin-top: .55rem; }
+    .balance-axis { display: flex; align-items: center; color: var(--accent); font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 850; }
+
+    .closing {
+      padding: 5rem 0 1rem;
+      scroll-margin-top: 4.5rem;
+    }
+    blockquote {
+      margin: 1.8rem 0;
+      padding: 1.5rem 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      font-family: "Noto Serif SC", "Source Han Serif SC", "STSong", "Songti SC", Georgia, serif;
+      font-size: clamp(1.35rem, 2.8vw, 2rem);
+      line-height: 1.45;
+    }
+    blockquote footer { margin-top: .8rem; color: var(--muted); font-family: "Noto Sans SC", sans-serif; font-size: .72rem; }
+    .dream-note { color: var(--muted); font-size: .76rem; }
+
+    .page-footer {
+      margin-top: 4.5rem;
+      padding-top: 1.6rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .footer-source { margin-bottom: .75rem; }
+
+    .production-meta {
+      --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep, #f4ead7)));
+      --production-ink: var(--ink, #25211c);
+      --production-muted: var(--muted, #6f675d);
+      --production-line: var(--line, #dacdb8);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1rem 0 0;
+    }
+    .production-label {
+      margin-right: .1rem;
+      color: var(--production-muted);
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .production-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: .38rem;
+      padding: .22rem .58rem;
+      background: var(--production-surface);
+      border-radius: 999px;
+      line-height: 1.35;
+    }
+    .production-key {
+      color: var(--production-muted);
+      font-size: .68rem;
+      letter-spacing: .04em;
+    }
+    .production-value {
+      color: var(--production-ink);
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      font-size: .72rem;
+      font-weight: 650;
+    }
+    .production-divider {
+      width: 1px;
+      height: 1.1rem;
+      margin: 0 .1rem;
+      background: var(--production-line);
+    }
+
+    @media (hover: hover) {
+      .segment:hover:not(.active), .fix-tab:hover:not(.active) { color: var(--ink); background: var(--paper-3); }
+      .top-link:hover { background: var(--paper-2); }
+      .top-link.source:hover { color: var(--paper); background: var(--accent-dark); }
+    }
+
+    @media (max-width: 880px) {
+      .layout { display: block; padding-top: 3.5rem; }
+      .toc { display: none; }
+      .cause-chain { grid-template-columns: 1fr 1fr; }
+      .cause-step:nth-child(2)::after { display: none; }
+      .fix-tabs { grid-template-columns: 1fr 1fr; }
+      .division { grid-template-columns: 1fr; }
+      .division-line { height: 1px; }
+    }
+
+    @media (max-width: 620px) {
+      .top-link:not(.source) { display: none; }
+      .layout { width: min(100% - 1.15rem, var(--max)); padding-top: 2.8rem; }
+      .hero { padding-bottom: 3.4rem; }
+      .hero::after { right: .2rem; bottom: -1.7rem; font-size: 6.5rem; }
+      h1 { font-size: clamp(2.65rem, 14vw, 4.2rem); }
+      section { padding: 4rem 0; }
+      .parser-lab, .fix-panel, .division { padding: 1rem; border-radius: var(--r-md); }
+      .lab-head { display: block; }
+      .segmented { margin-top: .7rem; }
+      .parse-track { grid-template-columns: 1fr; }
+      .parse-arrow { justify-self: center; transform: rotate(90deg); }
+      .cause-chain { grid-template-columns: 1fr; }
+      .cause-step:not(:last-child)::after { content: "↓"; display: block; right: 50%; top: auto; bottom: -.9rem; }
+      .fix-tabs { grid-template-columns: 1fr; }
+      .fix-tab { min-height: 58px; }
+      .fix-panel { min-height: 0; }
+      .fix-grid { grid-template-columns: 1fr; }
+      .warning-equation { grid-template-columns: 1fr; }
+      .operator { transform: rotate(90deg); }
+      .check-item summary { grid-template-columns: 30px minmax(0, 1fr) auto; }
+      .check-body { padding-left: 2.4rem; padding-right: .5rem; }
+      .age-balance { grid-template-columns: 1fr; }
+      .balance-axis { justify-content: center; transform: rotate(90deg); min-height: 36px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">VGalaxies · 可视化阅读</a>
+      <nav class="top-links" aria-label="页首导航">
+        <a class="top-link" href="#checklist">验收清单</a>
+        <a class="top-link source" href="https://htmx.org/essays/working-with-ai/" target="_blank" rel="noopener">阅读原文 ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout" id="top">
+    <main>
+      <header class="hero">
+        <div class="eyebrow">
+          <span>Working With AI</span>
+          <span>具体案例 · 解析器回归</span>
+        </div>
+        <h1>会用 AI 修 Bug，为什么还得懂架构？</h1>
+        <p class="hero-deck">一次看似普通的解析器回归，连续暴露了 AI 修复的三种常见偏差：只解眼前样例、凭空增加状态、把正确机制放错作用域。</p>
+        <div class="hero-meta">
+          <span>Carson Gross</span>
+          <span>2026-06-29</span>
+          <span>htmx Essays</span>
+          <a href="https://htmx.org/essays/working-with-ai/" target="_blank" rel="noopener">原文链接</a>
+        </div>
+        <div class="tldr">
+          <div class="tldr-label">30 秒结论</div>
+          <p><strong>AI 是速度放大器，不是架构所有者。</strong>它能快速定位原因、生成覆盖充分的测试；但只有理解既有系统的人，才能判断一个补丁是在解决问题，还是把复杂度悄悄转移到未来。</p>
+        </div>
+      </header>
+
+      <section id="bug">
+        <span class="section-no">01 / BUG 现场</span>
+        <h2>一个 <code>as</code>，同时属于两套语法</h2>
+        <p class="lead">hyperscript 是一门刻意拥抱英语歧义的 Web 脚本语言。升级到 0.9.91 后，下面这条原本可用的命令突然解析失败：</p>
+        <pre class="bug-code" aria-label="触发回归的 hyperscript 代码">fetch `{% url 'trade:get_symbol_data' %}?symbol=${symbol}` <span class="token-as">as</span> JSON</pre>
+        <p class="binding-note">问题不在 JSON，而在解析器决定这个 <code>as</code> 应该跟谁绑定。</p>
+
+        <div class="parser-lab" aria-label="as 关键字绑定方式演示">
+          <div class="lab-head">
+            <p class="lab-title">PARSER / BINDING LAB</p>
+            <div class="segmented" role="group" aria-label="选择解析方式">
+              <button class="segment active" type="button" data-parse-mode="expected" aria-pressed="true">预期解析</button>
+              <button class="segment" type="button" data-parse-mode="actual" aria-pressed="false">0.9.91 实际解析</button>
+            </div>
+          </div>
+          <div class="parse-track">
+            <div class="parse-box hot" id="expressionBox">
+              <div class="parse-kicker">EXPRESSION</div>
+              <strong>URL / 变量表达式</strong>
+              <p>先算出请求地址，但不在这里消费 <code>as</code>。</p>
+            </div>
+            <div class="parse-arrow" aria-hidden="true">→</div>
+            <div class="parse-box hot" id="fetchBox">
+              <div class="parse-kicker">FETCH MODIFIER</div>
+              <strong><code>as JSON</code> 处理响应</strong>
+              <p>完成请求后，把响应按 JSON 解码。</p>
+            </div>
+          </div>
+          <p class="lab-caption" id="parseCaption">预期：表达式只产出 URL，<code>fetch</code> 保留 <code>as JSON</code> 作为自己的响应修饰符。</p>
+        </div>
+      </section>
+
+      <section id="cause">
+        <span class="section-no">02 / 根因</span>
+        <h2>AI 很快找到了回归是怎么来的</h2>
+        <p class="lead">作者把 <code>go</code> 与 <code>fetch</code> 的 URL 解析抽成共用方法 <code>parseURLOrExpression()</code>。复用本身没错，问题是它无意中扩大了 <code>fetch</code> 后面的语法范围。</p>
+
+        <div class="cause-chain" aria-label="回归的因果链">
+          <article class="cause-step">
+            <span class="cause-num">01</span>
+            <strong>为了复用而重构</strong>
+            <p><code>go</code> 与 <code>fetch</code> 共享 URL / 表达式解析。</p>
+          </article>
+          <article class="cause-step">
+            <span class="cause-num">02</span>
+            <strong>语法边界被放宽</strong>
+            <p><code>fetch</code> 后不再只读 URL，而是允许一般表达式。</p>
+          </article>
+          <article class="cause-step">
+            <span class="cause-num">03</span>
+            <strong><code>as</code> 被提前消费</strong>
+            <p>表达式层把它认成类型转换，而不是 fetch 修饰符。</p>
+          </article>
+          <article class="cause-step">
+            <span class="cause-num">04</span>
+            <strong>绑定对象改变</strong>
+            <p>字符串先被转 JSON，请求语义因此失真。</p>
+          </article>
+        </div>
+
+        <p style="margin-top:1.4rem;color:var(--muted);font-size:.82rem;">这一段正是 AI 的强项：跨提交追踪改动、搜索共享调用点、把回归还原成可解释的因果链。作者说，Claude 几分钟就完成了原本会耗时更久的调查。</p>
+      </section>
+
+      <section id="fixes">
+        <span class="section-no">03 / 三次提案，一次收窄</span>
+        <h2>代码能跑，不等于修复落在正确的位置</h2>
+        <p class="lead">四个方案的差别，不只是“是否通过当前测试”，而是它们分别把特殊性放到了哪一层。逐步切换，观察每次方案留下的隐藏成本。</p>
+
+        <div class="fix-studio">
+          <div class="fix-tabs" role="tablist" aria-label="修复方案">
+            <button class="fix-tab active" id="tab-fix1" type="button" role="tab" aria-selected="true" aria-controls="panel-fix1" data-fix="fix1"><small>PROPOSAL 01</small><span>先读 stringLike</span></button>
+            <button class="fix-tab" id="tab-fix2" type="button" role="tab" aria-selected="false" aria-controls="panel-fix2" data-fix="fix2"><small>PROPOSAL 02</small><span>新增 noConversions</span></button>
+            <button class="fix-tab" id="tab-fix3" type="button" role="tab" aria-selected="false" aria-controls="panel-fix3" data-fix="fix3"><small>PROPOSAL 03</small><span>在共享方法 pushFollow</span></button>
+            <button class="fix-tab" id="tab-final" type="button" role="tab" aria-selected="false" aria-controls="panel-final" data-fix="final"><small>FINAL</small><span>只在 fetch 收窄</span></button>
+          </div>
+
+          <article class="fix-panel" id="panel-fix1" role="tabpanel" aria-labelledby="tab-fix1">
+            <div class="fix-grid">
+              <div>
+                <span class="fix-verdict">能修当前样例，但不够一般</span>
+                <h3>方案一：先尝试解析“像字符串的叶子”</h3>
+                <p>Claude 建议先读 <code>stringLike</code>，失败后再回退到一般表达式。它能保住字面量 URL 后面的 <code>as</code>，却遗漏了变量 URL。</p>
+                <pre>return this.parseElement("stringLike")
+  || this.requireElement("expression");
+
+// 仍然要支持：
+fetch $url as JSON</pre>
+              </div>
+              <div>
+                <div class="scope-card">
+                  <b>覆盖范围</b>
+                  <p>只覆盖报告中的字符串式 URL；变量、组合表达式仍有缺口。</p>
+                  <div class="scope-meter" aria-label="覆盖范围一格"><i class="on"></i><i></i><i></i><i></i></div>
+                </div>
+                <div class="scope-card">
+                  <b>人的判断</b>
+                  <p>这是针对样例形状打补丁，而不是恢复语法契约。</p>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="fix-panel" id="panel-fix2" role="tabpanel" aria-labelledby="tab-fix2" hidden>
+            <div class="fix-grid">
+              <div>
+                <span class="fix-verdict">更一般，但制造了新状态</span>
+                <h3>方案二：给解析器增加 <code>noConversions</code></h3>
+                <p>在 URL 解析期间暂时关闭类型转换，<code>AsExpression.parse()</code> 发现标志后直接退出。它解决得更完整，却为解析器增加了一条新的上下文状态。</p>
+                <pre>// AsExpression.parse()
+if (parser.noConversions) return;</pre>
+              </div>
+              <div>
+                <div class="scope-card">
+                  <b>覆盖范围</b>
+                  <p>能够覆盖一般表达式，但每个读写该标志的地方都成为新的耦合点。</p>
+                  <div class="scope-meter" aria-label="覆盖范围三格"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+                </div>
+                <div class="scope-card">
+                  <b>人的判断</b>
+                  <p>项目已经有表达“上层保留关键字”的机制，无需再创造平行基础设施。</p>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="fix-panel" id="panel-fix3" role="tabpanel" aria-labelledby="tab-fix3" hidden>
+            <div class="fix-grid">
+              <div>
+                <span class="fix-verdict">机制正确，作用域错误</span>
+                <h3>方案三：利用现成的 <code>follows</code></h3>
+                <p>作者提醒 Claude：解析器已经能让上层语法“认领”某个后继 token。于是共享方法在解析表达式前后 push / pop <code>as</code>，避免它被表达式层消费。</p>
+                <pre>parser.pushFollow("as");
+try {
+  return parser.parseURLOrExpression();
+} finally {
+  parser.popFollow();
+}</pre>
+              </div>
+              <div>
+                <div class="scope-card">
+                  <b>覆盖范围</b>
+                  <p>既复用现有机制，也支持变量表达式；看起来已经非常接近。</p>
+                  <div class="scope-meter" aria-label="覆盖范围四格"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+                </div>
+                <div class="scope-card">
+                  <b>隐藏回归</b>
+                  <p>共享方法也被 <code>go</code> 使用；但只有 <code>fetch</code> 把 <code>as</code> 当修饰符。</p>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="fix-panel" id="panel-final" role="tabpanel" aria-labelledby="tab-final" hidden>
+            <div class="fix-grid">
+              <div>
+                <span class="fix-verdict">现有机制 × 最小语义作用域</span>
+                <h3>最终修复：把特殊性留在 <code>FetchCommand#parse()</code></h3>
+                <p><code>as</code> 的冲突只属于 <code>fetch</code> 语法，因此 token 的保留也只应发生在这里。这样既不增加解析器状态，也不破坏 <code>go</code> 中合法的类型转换表达式。</p>
+                <pre>parser.pushFollow("as");
+try {
+  var url = parser.parseURLOrExpression();
+} finally {
+  parser.popFollow();
+}
+
+if (parser.matchToken("as")) {
+  // parse fetch response type
+}</pre>
+              </div>
+              <div>
+                <div class="scope-card">
+                  <b>为什么更干净</b>
+                  <p>复用既有机制，把例外放在真正拥有该语义的命令层。</p>
+                  <div class="scope-meter" aria-label="架构适配四格"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+                </div>
+                <div class="scope-card">
+                  <b>关键动作</b>
+                  <p>不是多写一段代码，而是把正确代码从共享层下移到责任边界。</p>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="roles">
+        <span class="section-no">04 / 分工边界</span>
+        <h2>AI 提供吞吐量，人负责守住复杂度</h2>
+        <p class="lead">这次协作不是“人想、AI 写”这么简单。更准确的分工是：AI 加速可搜索、可验证的劳动；人判断什么才算符合系统长期利益的答案。</p>
+
+        <div class="division">
+          <div>
+            <div class="role-label">AI / 擅长放大</div>
+            <h3>调查与机械耐力</h3>
+            <ul class="role-list">
+              <li><strong>追踪回归来源</strong><span>从共享方法和历史重构中快速定位根因。</span></li>
+              <li><strong>生成小而聚焦的测试</strong><span>覆盖字面量、变量与回归边界，补足人不愿反复 grind 的工作。</span></li>
+              <li><strong>快速展开候选方案</strong><span>把可能路径变成可审阅的代码，而不是停留在讨论。</span></li>
+            </ul>
+          </div>
+          <div class="division-line" aria-hidden="true"></div>
+          <div>
+            <div class="role-label">HUMAN / 必须拥有</div>
+            <h3>语义、作用域与技术债判断</h3>
+            <ul class="role-list">
+              <li><strong>知道系统已有哪套机制</strong><span>因此能识别 <code>noConversions</code> 是重复基础设施。</span></li>
+              <li><strong>看见共享抽象的副作用</strong><span>因此能发现方案三会误伤 <code>go</code> 的合法语法。</span></li>
+              <li><strong>定义“完成”的标准</strong><span>不只要求当前测试绿，还要求责任边界正确、未来复杂度可控。</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="warning-equation" aria-label="盲目接受补丁如何形成技术债">
+          <div><strong>局部正确</strong><span>当前样例通过</span></div>
+          <div class="operator">+</div>
+          <div><strong>缺少架构理解</strong><span>看不见边界</span></div>
+          <div class="operator">=</div>
+          <div><strong>延迟出现的技术债</strong><span>新状态、新例外、新回归</span></div>
+        </div>
+      </section>
+
+      <section id="checklist">
+        <span class="section-no">05 / 巫师，而不是学徒</span>
+        <h2>接受 AI 补丁前，先问五个问题</h2>
+        <p class="lead">原文没有把经验写成清单，但这个案例隐含了一套很实用的审查顺序。折叠态先给结论，展开可看它在本例中的具体含义。</p>
+
+        <div class="checklist">
+          <details class="check-item">
+            <summary>
+              <span class="check-no">01</span>
+              <span class="check-copy"><strong>它修的是语义，还是只修了样例形状？</strong><span>只对字符串有效、对变量失效，就是明显警报。</span></span>
+              <span class="check-plus" aria-hidden="true">＋</span>
+            </summary>
+            <div class="check-body">把 bug 报告中的输入换一种等价表达：字面量换变量、单一路径换组合表达式。如果补丁立刻失效，它大概率只是 pattern matching。</div>
+          </details>
+          <details class="check-item">
+            <summary>
+              <span class="check-no">02</span>
+              <span class="check-copy"><strong>代码库是否已经有表达这个意图的机制？</strong><span><code>follows</code> 已经存在，就不必再造 <code>noConversions</code>。</span></span>
+              <span class="check-plus" aria-hidden="true">＋</span>
+            </summary>
+            <div class="check-body">AI 容易基于局部上下文发明一个新开关。熟悉代码库的人应先搜索相邻模块、历史提交与同类语法，优先复用既有概念。</div>
+          </details>
+          <details class="check-item">
+            <summary>
+              <span class="check-no">03</span>
+              <span class="check-copy"><strong>这个特殊规则真正属于哪一层？</strong><span><code>as</code> 冲突属于 fetch，不属于共享 URL 解析器。</span></span>
+              <span class="check-plus" aria-hidden="true">＋</span>
+            </summary>
+            <div class="check-body">把例外放得太高，会污染所有调用方；放得太低，又可能重复实现。责任边界比“代码最少”更重要。</div>
+          </details>
+          <details class="check-item">
+            <summary>
+              <span class="check-no">04</span>
+              <span class="check-copy"><strong>共享调用方会不会被一起改变？</strong><span>修 fetch 时，必须同时验证 go 仍允许合法的转换表达式。</span></span>
+              <span class="check-plus" aria-hidden="true">＋</span>
+            </summary>
+            <div class="check-body">对共享方法的任何改动，都要枚举所有调用方。方案三之所以“差一点”，就是机制没错，却改变了不该改变的命令。</div>
+          </details>
+          <details class="check-item">
+            <summary>
+              <span class="check-no">05</span>
+              <span class="check-copy"><strong>测试是在证明补丁，还是在证明行为契约？</strong><span>同时覆盖原 bug、变量 URL 与 go 的非回归。</span></span>
+              <span class="check-plus" aria-hidden="true">＋</span>
+            </summary>
+            <div class="check-body">高质量测试不只复刻 bug 报告，还应保护相邻合法行为。AI 很适合生成这些小而聚焦的用例，但用例集合仍需要人定义边界。</div>
+          </details>
+        </div>
+      </section>
+
+      <section id="older">
+        <span class="section-no">06 / 老开发者的旁注</span>
+        <h2>AI 同时补偿衰退，也可能加速衰退</h2>
+        <p class="lead">50 岁的 Carson Gross 把 AI 的价值说得很个人：记忆不如从前、连续工作时间变短，而 AI 恰好能帮助恢复上下文并承担枯燥耐力活。但这份便利也让他担心，依赖会让整体智力退化得更快。</p>
+
+        <div class="age-balance">
+          <article class="balance-side">
+            <h3>它补上的能力</h3>
+            <ul>
+              <li><strong>上下文恢复：</strong>忘记细节后，仍能借助提示迅速重新理解。</li>
+              <li><strong>机械耐力：</strong>持续生成更完整的测试，不受精力下降限制。</li>
+              <li><strong>项目切换：</strong>在开源与工作项目间更快重建心智模型。</li>
+            </ul>
+          </article>
+          <div class="balance-axis" aria-hidden="true">⇄</div>
+          <article class="balance-side">
+            <h3>它可能拿走的能力</h3>
+            <ul>
+              <li><strong>主动回忆：</strong>每次都外包检索，自己的记忆路径会不会变弱？</li>
+              <li><strong>独立推演：</strong>是否在看完多个提案后，才想起自己本可直接完成？</li>
+              <li><strong>认知主权：</strong>最终判断来自理解，还是来自“模型听起来很确定”？</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="closing" id="moral">
+        <span class="section-no">结论</span>
+        <h2>真正稀缺的不是代码，而是拒绝错误复杂度的判断力</h2>
+        <p class="lead">作者没有否定 AI，反而明确肯定它在调查和测试上的价值。他反对的是一种工作方式：把“模型给出的第一个或第二个可运行答案”误当成工程完成。</p>
+        <blockquote>
+          不是盲目接受方案的“巫师学徒”，而是理解问题、要求答案符合现有架构，并用测试验证它的“巫师”。
+          <footer>— 对 Carson Gross 原文核心比喻的中文转述</footer>
+        </blockquote>
+        <p><strong>把 AI 留在回路里，也把理解留在自己手里。</strong>前者提高速度，后者决定速度最终把项目带向哪里。</p>
+        <p class="dream-note">脚注彩蛋：作者声称“技术债指数增长”这一论断，是梦里启示给他的。</p>
+
+        <footer class="page-footer">
+          <p class="footer-source">原文：<a href="https://htmx.org/essays/working-with-ai/" target="_blank" rel="noopener">Working With AI: A Concrete Example</a> · Carson Gross · htmx Essays · 2026-06-29</p>
+          <p>延伸：<a href="https://htmx.org/essays/code-is-cheap/" target="_blank" rel="noopener">Code is Cheap(er)</a> · <a href="https://hyperscript.org" target="_blank" rel="noopener">hyperscript</a> · <a href="https://github.com/bigskysoftware/_hyperscript/blob/ea9a6534d24cf5c7257adcaad75ee75b0c612d8e/src/core/tokenizer.js#L11" target="_blank" rel="noopener">follows 源码</a></p>
+          <p class="production-meta"
+             data-llm-model="GPT-5.6 Sol"
+             data-llm-effort="xhigh">
+            <span class="production-label">制作信息</span>
+            <span class="production-chip">
+              <span class="production-key">LLM</span>
+              <span class="production-value">GPT-5.6 Sol</span>
+            </span>
+            <span class="production-chip">
+              <span class="production-key">effort</span>
+              <span class="production-value">xhigh</span>
+            </span>
+          </p>
+        </footer>
+      </section>
+    </main>
+
+    <aside class="toc" aria-label="文章目录">
+      <p class="toc-label">阅读路径</p>
+      <a href="#bug">01 · Bug 现场</a>
+      <a href="#cause">02 · 回归根因</a>
+      <a href="#fixes">03 · 三次修复</a>
+      <a href="#roles">04 · 人机分工</a>
+      <a href="#checklist">05 · 验收清单</a>
+      <a href="#older">06 · 年龄旁注</a>
+      <a href="#moral">结论</a>
+    </aside>
+  </div>
+
+  <script>
+    const parseModes = {
+      expected: {
+        expressionClass: 'parse-box hot',
+        fetchClass: 'parse-box hot',
+        expressionText: '先算出请求地址，但不在这里消费 as。',
+        fetchText: '完成请求后，把响应按 JSON 解码。',
+        caption: '预期：表达式只产出 URL，fetch 保留 as JSON 作为自己的响应修饰符。'
+      },
+      actual: {
+        expressionClass: 'parse-box hot',
+        fetchClass: 'parse-box dim',
+        expressionText: '一般表达式把 as 当成类型转换，并提前尝试把字符串转成 JSON。',
+        fetchText: 'as 已被上游消费，fetch 再也看不到自己的响应修饰符。',
+        caption: '0.9.91：共享解析方法扩大了语法范围，as 被表达式层抢走，绑定发生在错误阶段。'
+      }
+    };
+
+    const expressionBox = document.getElementById('expressionBox');
+    const fetchBox = document.getElementById('fetchBox');
+    const parseCaption = document.getElementById('parseCaption');
+    const parseButtons = document.querySelectorAll('[data-parse-mode]');
+
+    function setParseMode(mode) {
+      const state = parseModes[mode];
+      expressionBox.className = state.expressionClass;
+      fetchBox.className = state.fetchClass;
+      expressionBox.querySelector('p').textContent = state.expressionText;
+      fetchBox.querySelector('p').textContent = state.fetchText;
+      parseCaption.textContent = state.caption;
+      parseButtons.forEach((button) => {
+        const active = button.dataset.parseMode === mode;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+    }
+
+    parseButtons.forEach((button) => {
+      button.addEventListener('click', () => setParseMode(button.dataset.parseMode));
+    });
+
+    const fixTabs = document.querySelectorAll('[data-fix]');
+    const fixPanels = document.querySelectorAll('.fix-panel');
+
+    function setFix(fix) {
+      fixTabs.forEach((tab) => {
+        const active = tab.dataset.fix === fix;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+      });
+      fixPanels.forEach((panel) => {
+        panel.hidden = panel.id !== `panel-${fix}`;
+      });
+    }
+
+    fixTabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => setFix(tab.dataset.fix));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const next = (index + delta + fixTabs.length) % fixTabs.length;
+        fixTabs[next].focus();
+        setFix(fixTabs[next].dataset.fix);
+      });
+    });
+
+    const tocLinks = document.querySelectorAll('.toc a');
+    const observedSections = [...tocLinks]
+      .map((link) => document.querySelector(link.getAttribute('href')))
+      .filter(Boolean);
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        tocLinks.forEach((link) => {
+          link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`);
+        });
+      }, { rootMargin: '-20% 0px -62% 0px', threshold: [0.05, 0.2, 0.5] });
+      observedSections.forEach((section) => observer.observe(section));
+    }
+  </script>
+</body>
+</html>

@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: working-with-ai-understanding-architecture
+    title: '会用 AI 修 Bug，为什么还得懂架构'
+    date: 2026-07-11
+    source_type: blog
+    source_url: 'https://htmx.org/essays/working-with-ai/'
   - slug: harness-agent-self-improvement
     title: 'Harness 怎么让 Agent 学会改进自己'
     date: 2026-07-11
