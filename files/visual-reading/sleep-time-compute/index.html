@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sleep-time compute：让 Agent 在睡觉时学习</title>
+  <meta name="description" content="Context 的 sleep-time compute 中文可视化阅读：为什么不在热路径上学习、Generator-Reflector-Curator 循环、分层与触发机制，以及积累与呈现分离的设计原则。">
+  <style>
+    :root {
+      --paper: #fbf6ea;
+      --paper-2: #f4ead7;
+      --paper-3: #e8dcc7;
+      --ink: #25211c;
+      --muted: #6f675d;
+      --line: #dacdb8;
+      --accent: #a4512f;
+      --accent-2: #2f6f73;
+      --card: #fffaf0;
+      --code: #332a22;
+      --shadow: 0 10px 30px rgba(80, 57, 32, .08);
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.78;
+      letter-spacing: 0;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; display: block; }
+
+    .site-header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(251, 246, 234, .96);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(8px);
+    }
+    .nav {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: .85rem 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: .9rem;
+      font-size: .92rem;
+      color: var(--muted);
+    }
+    .nav-links a { color: var(--muted); }
+
+    .layout {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 3.2rem 1.1rem 5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 250px;
+      gap: 3.2rem;
+      align-items: start;
+    }
+    article { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5rem;
+      border-left: 1px solid var(--line);
+      padding-left: 1.1rem;
+      font-size: .9rem;
+      color: var(--muted);
+    }
+    .toc strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: .55rem;
+      font-size: .88rem;
+    }
+    .toc a {
+      display: block;
+      color: var(--muted);
+      padding: .22rem 0;
+      line-height: 1.35;
+    }
+
+    .hero {
+      padding-bottom: 1.4rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 2.8rem;
+    }
+    .kicker {
+      color: var(--accent);
+      font-size: .88rem;
+      font-weight: 700;
+      margin-bottom: .8rem;
+    }
+    h1 {
+      margin: 0;
+      max-width: 840px;
+      font-size: clamp(2.35rem, 5vw, 4.2rem);
+      line-height: 1.06;
+      letter-spacing: 0;
+      font-weight: 760;
+    }
+    .subtitle {
+      margin: 1.15rem 0 0;
+      max-width: 760px;
+      font-size: 1.18rem;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      margin-top: 1.3rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .22rem .68rem;
+      color: var(--muted);
+      background: var(--card);
+      font-size: .84rem;
+      line-height: 1.45;
+    }
+    .source-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      margin-top: 1.2rem;
+    }
+    .source-row a {
+      border-bottom: 1px solid currentColor;
+      font-weight: 650;
+    }
+
+    section {
+      margin: 4.2rem 0;
+      scroll-margin-top: 5.4rem;
+    }
+    h2 {
+      font-size: clamp(1.55rem, 3vw, 2.35rem);
+      line-height: 1.22;
+      margin: 0 0 1.15rem;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 1.18rem;
+      line-height: 1.35;
+      margin: 2.2rem 0 .65rem;
+      letter-spacing: 0;
+    }
+    p { margin: .9rem 0; }
+    .lead {
+      font-size: 1.06rem;
+      color: #41382f;
+    }
+    strong { font-weight: 740; }
+    ul, ol { padding-left: 1.25rem; }
+    li { margin: .4rem 0; }
+
+    .tldr {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .9rem;
+      margin: 1.35rem 0 2rem;
+    }
+    .tldr-card {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .tldr-card b {
+      display: block;
+      font-size: .9rem;
+      margin-bottom: .45rem;
+      color: var(--accent);
+    }
+    .tldr-card p {
+      margin: 0;
+      font-size: .96rem;
+      color: #3c342d;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .85rem;
+      margin: 1.25rem 0;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 118px;
+    }
+    .metric .num {
+      display: block;
+      font-size: 1.85rem;
+      line-height: 1.05;
+      font-weight: 780;
+      color: var(--accent);
+      margin-bottom: .38rem;
+    }
+    .metric .label {
+      display: block;
+      color: var(--ink);
+      font-size: .95rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .metric .hint {
+      display: block;
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.45;
+      margin-top: .35rem;
+    }
+
+    /* 自制流程图 */
+    .diagram {
+      margin: 1.5rem 0 2rem;
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 1.4rem 1.2rem 1.1rem;
+      box-shadow: var(--shadow);
+    }
+    .diagram-title {
+      font-size: .84rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 1.1rem;
+      letter-spacing: .02em;
+    }
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .55rem;
+      align-items: stretch;
+    }
+    .pl-node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: .9rem .8rem;
+      background: #fffdf7;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .pl-node .stage {
+      font-size: .74rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: .35rem;
+    }
+    .pl-node b {
+      display: block;
+      color: var(--accent-2);
+      margin-bottom: .35rem;
+      font-size: 1.02rem;
+    }
+    .pl-node span {
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.5;
+    }
+    .pl-node::after {
+      content: "→";
+      position: absolute;
+      right: -.46rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 1.1rem;
+      z-index: 2;
+    }
+    .pl-node:last-child::after { content: ""; }
+    .pl-node.terminal {
+      background: #f2ede0;
+      border-color: var(--accent);
+    }
+
+    /* GRC 循环 */
+    .loop {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .7rem;
+      margin: 1.4rem 0 .4rem;
+    }
+    .loop-node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1rem;
+      background: #fffdf7;
+      position: relative;
+    }
+    .loop-node .role {
+      font-size: 1.05rem;
+      font-weight: 760;
+      color: var(--accent-2);
+      margin-bottom: .1rem;
+    }
+    .loop-node .role-en {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-bottom: .5rem;
+    }
+    .loop-node p {
+      margin: 0;
+      font-size: .9rem;
+      color: #3c342d;
+      line-height: 1.55;
+    }
+    .loop-node::after {
+      content: "→";
+      position: absolute;
+      right: -.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+    .loop-node:last-child::after { content: ""; }
+    .loop-node .tag {
+      display: inline-block;
+      margin-top: .55rem;
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: #f3e7d6;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .08rem .5rem;
+    }
+
+    /* GRC 反馈回流：Curator 写回 → 下一轮 Generator */
+    .loop-feedback {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      margin: .2rem 0 .2rem;
+      padding: .55rem .9rem;
+      border: 1px dashed var(--accent);
+      border-radius: 8px;
+      background: #f7f0e3;
+      color: #4a3f34;
+      font-size: .88rem;
+    }
+    .loop-feedback .arrow {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 1.05rem;
+      white-space: nowrap;
+    }
+    .loop-feedback b { color: var(--accent-2); }
+
+    /* 分层 tiers */
+    .tiers {
+      margin: 1.3rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
+    }
+    .tier {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffdf7;
+      padding: .8rem 1rem;
+      display: flex;
+      align-items: baseline;
+      gap: .8rem;
+    }
+    .tier b { color: var(--accent-2); white-space: nowrap; min-width: 92px; }
+    .tier span { color: var(--muted); font-size: .92rem; }
+    .tier.org { margin-right: 0; }
+    .tier.team { margin-right: 3rem; }
+    .tier.ind { margin-right: 6rem; }
+
+    .compare {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: table;
+    }
+    .compare th,
+    .compare td {
+      padding: .78rem .85rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: .93rem;
+    }
+    .compare th {
+      background: var(--paper-2);
+      color: var(--ink);
+      font-weight: 760;
+    }
+    .compare tr:last-child td { border-bottom: 0; }
+    .compare td b { color: var(--accent); }
+
+    details {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      padding: .9rem 1rem;
+      margin: 1rem 0;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 720;
+      color: var(--ink);
+    }
+    summary span {
+      display: block;
+      color: var(--muted);
+      font-weight: 450;
+      font-size: .9rem;
+      margin-top: .2rem;
+    }
+    details[open] summary { margin-bottom: .6rem; }
+    .example-log {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #352b23;
+      color: #f8edda;
+      border-radius: 8px;
+      padding: .95rem 1.1rem;
+      overflow-x: auto;
+      font-size: .84rem;
+      line-height: 1.6;
+      margin: .3rem 0 .8rem;
+    }
+    .example-log .dim { color: #b9a98f; }
+    .example-note {
+      border-left: 4px solid var(--accent-2);
+      background: #f2ede0;
+      padding: .8rem 1rem;
+      border-radius: 0 8px 8px 0;
+      font-size: .95rem;
+    }
+
+    .note {
+      border-left: 4px solid var(--accent-2);
+      background: #f7f3e8;
+      padding: .95rem 1rem;
+      margin: 1.2rem 0;
+      color: #40372f;
+    }
+    .quote {
+      border-left: 4px solid var(--accent);
+      padding: .5rem 0 .5rem 1.2rem;
+      margin: 1.6rem 0;
+      font-size: 1.12rem;
+      line-height: 1.6;
+      color: #3a322b;
+      font-style: italic;
+    }
+    .quote span {
+      display: block;
+      margin-top: .5rem;
+      font-size: .9rem;
+      font-style: normal;
+      color: var(--muted);
+    }
+
+    footer {
+      margin-top: 5rem;
+      padding-top: 1.3rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    footer a { color: var(--muted); border-bottom: 1px solid currentColor; }
+
+    @media (max-width: 880px) {
+      .layout { display: block; padding-top: 2rem; }
+      .toc { display: none; }
+      .nav { align-items: flex-start; }
+      .nav-links { gap: .65rem; font-size: .85rem; }
+      .tldr, .metric-grid, .pipeline, .loop { grid-template-columns: 1fr; }
+      .pl-node::after, .loop-node::after {
+        content: "↓";
+        right: 50%;
+        top: auto;
+        bottom: -.55rem;
+        transform: translateX(50%);
+      }
+      .pl-node:last-child::after, .loop-node:last-child::after { content: ""; }
+      h1 { font-size: 2.3rem; }
+      .tier.team, .tier.ind { margin-right: 0; }
+      .compare { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav">
+      <a class="brand" href="https://vgalaxies.github.io/">VGalaxies</a>
+      <div class="nav-links">
+        <a href="https://vgalaxies.github.io/visual-reading/">Visual Reading</a>
+        <a href="https://www.context.ai/blog/sleep-time-compute">原文 ↗</a>
+      </div>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <article>
+      <header class="hero">
+        <div class="kicker">Visual Reading · Blog</div>
+        <h1>让 Agent 在睡觉时学习</h1>
+        <p class="subtitle">Agent 干活时会产生大量「废气」——它检索了什么、试了什么、哪里错了、人怎么纠正的。这些是学习的金矿，但形态又乱又多，而且恰好在用户等答案时产生。Context 的做法：别在热路径上学，等空闲算力时再学，就像人睡觉时把白天的经验固化成记忆。</p>
+        <div class="meta">
+          <span class="pill">Context 官方博客</span>
+          <span class="pill">Agent / Context Engineering</span>
+          <span class="pill">Memory Consolidation</span>
+        </div>
+        <div class="source-row">
+          <a href="https://www.context.ai/blog/sleep-time-compute">阅读原文 / Source</a>
+          <a href="https://www.context.ai/">context.ai</a>
+        </div>
+      </header>
+
+      <nav class="toc-mobile"></nav>
+
+      <section id="tldr">
+        <h2>30 秒读懂</h2>
+        <p class="lead">Agent 每完成一个任务都会留下一条原始轨迹（raw trail）。里面藏着最值钱的东西——经验教训，但它以最糟的形态、在最糟的时机出现：又脏又长，而且正好是用户在等答案的时候。所以 Context 不在此刻学习，而是把「把轨迹提炼成可复用知识」这件贵活挪到<strong>空闲算力</strong>上做，避开用户的时钟。这就是 sleep-time compute。</p>
+        <div class="tldr">
+          <div class="tldr-card">
+            <b>问题</b>
+            <p>提炼原始轨迹很贵。放在推理时（热路径）做，每个任务都要为上一个任务「打扫卫生」，用户直接感受为延迟。</p>
+          </div>
+          <div class="tldr-card">
+            <b>做法</b>
+            <p>热路径上只廉价捕获原始轨迹就走人；提炼放到空闲算力上跑，通过 Generator→Reflector→Curator 循环写回上下文层。</p>
+          </div>
+          <div class="tldr-card">
+            <b>结果</b>
+            <p>明天跑你任务的 agent 比今天更聪明，而今天没有任何一个任务因此变慢——学习「借」的不是工作的延迟预算。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="hotpath">
+        <h2>为什么热路径不是学习的地方</h2>
+        <p>推理时有两样东西稀缺：<strong>延迟</strong>和<strong>注意力</strong>。用户在等，你花在整理上一个任务记录上的每一毫秒，都是当前任务变慢的一毫秒。当着用户的面把一条乱糟糟的轨迹提炼成干净、可复用的上下文，是笔糟糕的交易。</p>
+        <p>所以平台在热路径上几乎什么都不做：任务进行时廉价地捕获原始轨迹，然后就走人。真正贵的那部分——把轨迹变成下一个 agent 能用的东西——完全挪到热路径之外，那里没有用户的时钟在跑。</p>
+        <p>其实只有三条路，另外两条都更糟：</p>
+
+        <table class="compare">
+          <thead>
+            <tr>
+              <th>方案</th>
+              <th>做法</th>
+              <th>代价</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>内联提炼</b></td>
+              <td>在任务过程中顺手把上一条轨迹整理干净</td>
+              <td>每个任务都交一笔「打扫」税，用户感受为延迟</td>
+            </tr>
+            <tr>
+              <td><b>干脆不学</b></td>
+              <td>捕获了轨迹但从不消化</td>
+              <td>系统永远不进步，扔掉了每个任务产出的最有价值的东西</td>
+            </tr>
+            <tr>
+              <td><b>热路径外消化</b></td>
+              <td>捕获归捕获，提炼挪到空闲算力上做</td>
+              <td>拿到学习，又不用交延迟税 ✓</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>为什么「睡眠」这个词用得准</h3>
+        <p>这个类比不只是可爱。生物的记忆固化做的是结构上一模一样的事：白天的原始经验在身体离线时被重放、压缩成持久记忆——<strong>恰恰是因为在清醒时做这件事会干扰行动</strong>。把固化挪到空闲时间，是同一个动作、出于同一个理由：系统白天行动、夜里学习，两者互不干扰。工作保持快，是因为学习等到了安静的时刻。</p>
+      </section>
+
+      <section id="idle">
+        <h2>趁没人用的时候处理</h2>
+        <p>两个活动任务之间，有算力闲着、没有用户在等。这就是 sleep-time compute 运行的时候。它拿最近工作的原始活动，消化成结构化知识——流程笔记、纠正、反复出现的模式——写回上下文层，供未来的 agent 取用。</p>
+        <p>那些在热路径上会花掉延迟的工作，在空闲周期上花的是<strong>零成本</strong>，而且它改善之后的每一次检索。明天的任务更快也更好，靠的是在没人使用的时间里跑完的处理。今天没有任何东西因此变慢。</p>
+
+        <h3>一个具体例子：财报 deck</h3>
+        <p>说得具体点。一个 agent 在做财报 deck 时留下一条原始轨迹：它打开的文件、画的图表，以及一位专家的纠正——数字应该用调整后 EBITDA、瀑布图应该按季度环比来做。原始形态下，这是几百行事件日志，对下一个 agent 毫无用处。</p>
+
+        <details>
+          <summary>看这条轨迹如何从一千行日志被压成一句话
+            <span>展开对比：原始事件日志 → sleep-time compute 写回的一句持久笔记</span>
+          </summary>
+          <div class="example-log"><span class="dim"># 原始轨迹（几百行事件日志，下一个 agent 用不了）</span>
+[t0] open  q3_financials.xlsx
+[t1] read  sheet "P&amp;L", rows 12–48
+[t2] draw  bar_chart(revenue_by_month)
+[t3] draw  waterfall(net_income, period=YoY)
+[t4] <span class="dim">expert_correction:</span> "use adjusted EBITDA, not net income"
+[t5] <span class="dim">expert_correction:</span> "waterfall should be quarter-over-quarter"
+[t6] redraw waterfall(adj_ebitda, period=QoQ)
+      ... (还有几百行) ...</div>
+          <div class="example-note">
+            sleep-time compute 读完，往这个账户的上下文里写下<strong>一条</strong>持久笔记：<br>
+            「本账户使用调整后 EBITDA；瀑布图按季度环比。」<br>
+            下一个 agent 读的是一句话，而不是一千行日志。
+          </div>
+        </details>
+      </section>
+
+      <section id="pipeline">
+        <h2>这条管线做了什么</h2>
+        <p>具体来说，消化是一条管线。原始事件被<strong>提炼</strong>成候选观察；从噪声里<strong>抽取信号</strong>，保留反复出现的纠正、丢掉一次性的；被保留的信号<strong>整理写入</strong>上下文存储，成为下一个 agent 在恰当时机读到的结构化、可检索的知识。</p>
+
+        <div class="diagram">
+          <div class="diagram-title">SLEEP-TIME COMPUTE 管线</div>
+          <div class="pipeline">
+            <div class="pl-node">
+              <span class="stage">输入</span>
+              <b>原始工作事件</b>
+              <span>traces、corrections、observations——又脏又长</span>
+            </div>
+            <div class="pl-node">
+              <span class="stage">Distill</span>
+              <b>提炼</b>
+              <span>原始事件 → 候选笔记</span>
+            </div>
+            <div class="pl-node">
+              <span class="stage">Extract</span>
+              <b>抽取信号</b>
+              <span>保留反复出现的，丢掉一次性的</span>
+            </div>
+            <div class="pl-node terminal">
+              <span class="stage">Curate</span>
+              <b>整理入库</b>
+              <span>写进 .context：结构化、可检索</span>
+            </div>
+          </div>
+        </div>
+        <p class="note">整条管线跑在<strong>空闲算力</strong>上，没有用户在等。它的价值在于把工作的原始废气变成结构化上下文，全程避开热路径。</p>
+
+        <h3>为什么要分成 org / team / individual 三层</h3>
+        <p>管线在三个层级上<strong>并发</strong>运行，因为「整个组织该学的」和「某个人的助手该学的」是不同的消化结果。属于所有人的模式写在树的高处；只属于某个人的偏好留在他那里。</p>
+        <div class="tiers">
+          <div class="tier org"><b>Org 组织级</b><span>属于所有人的模式——公司通用规范、跨团队约定，写在树的最高处</span></div>
+          <div class="tier team"><b>Team 团队级</b><span>某个团队共享的做法与偏好</span></div>
+          <div class="tier ind"><b>Individual 个人级</b><span>只属于一个人的偏好，跟着他走，不污染更高层</span></div>
+        </div>
+      </section>
+
+      <section id="grc">
+        <h2>核心：Generator、Reflector、Curator</h2>
+        <p>整件事的心脏是一个借自近期研究的循环。它的要点是<strong>克制</strong>——天真地把 agent 注意到的一切都追加进去，只会让上下文塞满噪声和矛盾，而噪声多的上下文检索得更差，不是更好。这个循环让上下文在<strong>信号</strong>上增长，而不是在<strong>体量</strong>上增长。目标不是一个更大的存储，而是一个更锐利的存储。</p>
+
+        <div class="diagram">
+          <div class="diagram-title">GENERATOR → REFLECTOR → CURATOR 循环</div>
+          <div class="loop">
+            <div class="loop-node">
+              <div class="role">提议者</div>
+              <div class="role-en">Generator</div>
+              <p>从新活动里提议对上下文的更新——「我觉得这条值得记下来」。</p>
+              <span class="tag">＋ 提出候选</span>
+            </div>
+            <div class="loop-node">
+              <div class="role">批判者</div>
+              <div class="role-en">Reflector</div>
+              <p>批判这些提议：这条教训是真的吗？和已知的一致吗？值得留吗？</p>
+              <span class="tag">✕ 挡掉噪声</span>
+            </div>
+            <div class="loop-node">
+              <div class="role">策展者</div>
+              <div class="role-en">Curator</div>
+              <p>决定实际写什么，增量地、一点点地写进存储。</p>
+              <span class="tag">✓ 写入存储</span>
+            </div>
+          </div>
+          <div class="loop-feedback">
+            <span class="arrow">↺ 回流</span>
+            <span>Curator 写入后，更新过的存储成为<b>下一轮 Generator</b> 的已知背景——所以这是一个<b>循环</b>，不是一次性流水线。存储越锐利，下一轮的提议就越贴合、越少重复。</span>
+          </div>
+        </div>
+
+        <h3>一致性：Reflector 真正的活</h3>
+        <p>Reflector 真正的工作是保证<strong>一致性</strong>。当一条新教训和存储里已有的一条矛盾时，把两条都追加进去，会让下一个 agent 拿到两个答案却无从选择。Reflector 抓住这个冲突，Curator 来解决它——要么更新旧笔记，要么把新笔记的适用范围缩小到它真正成立的情况，让存储保持连贯，而不是不断累积矛盾。</p>
+        <div class="quote">
+          写入按<strong>语义</strong>去重，所以同一条教训学了十次只记录一次——被强化的是它的置信度，而不是它的体量。
+          <span>—— 目标不是更大的存储，是更锐利的存储</span>
+        </div>
+      </section>
+
+      <section id="triggers">
+        <h2>什么时候触发</h2>
+        <p>两个触发器会启动它，一个管稳态，一个管尖峰。关键是：两者都跑在<strong>空闲池</strong>上，与服务用户的工作负载解耦，谁都不和实时推理抢资源——学习永远不从工作的延迟预算里借钱。</p>
+        <div class="metric-grid">
+          <div class="metric">
+            <span class="num">每隔几小时</span>
+            <span class="label">定时节奏（Schedule）</span>
+            <span class="hint">按固定节拍扫一遍最近的活动，负责稳态消化。</span>
+          </div>
+          <div class="metric">
+            <span class="num">超过阈值</span>
+            <span class="label">容量阈值（Threshold）</span>
+            <span class="hint">未处理活动堆积到可配置上限时触发，让一波突发工作被及时消化，不用等下一次定时。</span>
+          </div>
+          <div class="metric">
+            <span class="num">0</span>
+            <span class="label">对实时推理的竞争</span>
+            <span class="hint">两者都跑在空闲池上，与用户工作负载解耦，不占延迟预算。</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="separation">
+        <h2>底层设计：先积累，后呈现</h2>
+        <p>所有这一切底下有一个值得单独拎出来的设计选择，因为它是「<strong>own the data, rent the methods</strong>（拥有数据、租用方法）」原则在上下文层上的应用。<strong>积累知识</strong>和<strong>呈现知识</strong>之间有一条硬边界。</p>
+        <ul>
+          <li><strong>存储 = 持久的积累：</strong>组织学到的东西的原始与提炼记录，长期沉淀下来。</li>
+          <li><strong>呈现 = 可替换的一层：</strong>存储如何被编译成某个 prompt 的合适上下文，是独立、可插拔的一层——今天用这套 prompt 优化方法，明天换一套，都不用重新处理底下的存储。</li>
+        </ul>
+        <p>把两者分开的意义就在这里：把上下文变成 prompt 的方法会不断进步，但积累下来的上下文<strong>不必</strong>每次方法进步时都重建一遍。</p>
+        <p class="note">回报很具体：当一套更好的 prompt 优化方法上线，你把编译器指向已有的存储，立刻就能拿到更好的 prompt——不用重新处理一年的提炼上下文。你<strong>租用</strong>最新的方法，<strong>保留</strong>它所依赖的数据。这就是「上下文层」整个论点，浓缩在一个操作细节里。</p>
+      </section>
+
+      <section id="closing">
+        <h2>在睡梦中完成学习</h2>
+        <p>便宜的洞见是：agent 只要在工作，就会产生用来改进自己的数据。贵的部分是把这些原始数据变成可用的东西——而窍门在于<strong>永远不在热路径上为它付费</strong>。</p>
+        <ul>
+          <li><strong>廉价捕获：</strong>用户在等的时候，只做便宜的捕获。</li>
+          <li><strong>空闲消化：</strong>没人等的时候，在空闲算力上消化。</li>
+          <li><strong>积累持久、呈现可换：</strong>数据长期留存，方法随时替换。</li>
+        </ul>
+        <div class="quote">
+          明天跑你任务的 agent 比今天的更好，而你今天没有任何一个任务因此变慢。
+          <span>—— 这就是「让学习在睡梦中完成」的全部意义</span>
+        </div>
+      </section>
+
+      <footer>
+        <p>本页为「可视化阅读」笔记，内容与数据以原文为准。</p>
+        <p>原文：<a href="https://www.context.ai/blog/sleep-time-compute">Sleep-time compute</a> · Context（context.ai）</p>
+      </footer>
+    </article>
+
+    <aside class="toc">
+      <strong>目录</strong>
+      <a href="#tldr">30 秒读懂</a>
+      <a href="#hotpath">为什么热路径不是学习的地方</a>
+      <a href="#idle">趁没人用的时候处理</a>
+      <a href="#pipeline">这条管线做了什么</a>
+      <a href="#grc">Generator / Reflector / Curator</a>
+      <a href="#triggers">什么时候触发</a>
+      <a href="#separation">先积累，后呈现</a>
+      <a href="#closing">在睡梦中完成学习</a>
+    </aside>
+  </div>
+</body>
+</html>

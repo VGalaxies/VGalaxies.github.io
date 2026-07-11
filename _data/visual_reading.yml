@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: sleep-time-compute
+    title: 'Context 怎么让 agent 在睡觉时学习'
+    date: 2026-07-11
+    source_type: blog
+    source_url: 'https://www.context.ai/blog/sleep-time-compute'
   - slug: seer-online-context-learning-rl
     title: 'Seer 怎么把同步 RL 的 rollout 提速一倍'
     date: 2026-07-10
