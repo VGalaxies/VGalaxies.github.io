@@ -1,26 +1,20 @@
 # VGalaxies.github.io
 
-个人主页 — 当前主要承载 **visual reading** 栏目：把读过的论文 / 博客 / 长文做成单页可视化笔记。
+Deployment repository for the [VGalaxies website](https://vgalaxies.github.io/) and its [Visual Reading archive](https://vgalaxies.github.io/visual-reading/).
 
-- 站点：<https://vgalaxies.github.io/>
-- Visual Reading 索引：<https://vgalaxies.github.io/visual-reading/>
+The site is built with Jekyll and published through GitHub Pages from the `main` branch. Jekyll renders the home page and archive, while each Visual Reading note is served as a standalone page with any required assets stored alongside it.
 
-## 仓库布局
+## Repository structure
 
+```text
+_data/visual_reading.yml                 Archive metadata and tags
+_layouts/default.html                    Shared site shell
+_pages/visual-reading.md                 Visual Reading archive
+assets/                                  Shared site styles and scripts
+files/visual-reading/<slug>/             Published notes and their assets
+index.md                                 Home page
 ```
-_config.yml                          Jekyll 配置
-_data/visual_reading.yml             visual reading 元数据（卡片列表）
-_pages/visual-reading.md             /visual-reading/ 索引页（从 _data 渲染）
-files/visual-reading/<slug>/index.html   独立 HTML 文件（self-contained）
-index.md                             首页
-```
 
-## 发布新一篇 visual reading
+## Legacy Hugo site
 
-1. 在本地准备好 self-contained HTML（参考 `vgalaxies-visual-reading` 私有 repo 的 `commands/blog-to-html.md`）。
-2. 按 `commands/publish-visual-reading.md` 的流程把 HTML 放到 `files/visual-reading/<slug>/index.html`，并在 `_data/visual_reading.yml` 的 `entries` 顶部插入一条。
-3. `git add` → commit → push。
-
-## 旧版站点
-
-旧的 Hugo 站点产物保留在 [`backup/hugo-site-2024`](https://github.com/VGalaxies/VGalaxies.github.io/tree/backup/hugo-site-2024) 分支。
+The previous Hugo site is preserved in the [`backup/hugo-site-2024`](https://github.com/VGalaxies/VGalaxies.github.io/tree/backup/hugo-site-2024) branch.
