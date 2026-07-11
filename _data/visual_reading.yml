@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: ai-efficiency-gain-illusion
+    title: '简单任务用 AI 为什么越用越多却没省时间'
+    date: 2026-07-12
+    source_type: paper
+    source_url: 'https://arxiv.org/abs/2605.22687v1'
   - slug: agentic-code-review
     title: 'Agent 写代码越快，为什么审查越重要'
     date: 2026-07-12
