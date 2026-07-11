@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: llm-mirror-test-corrupt-own-output
+    title: '偷偷改掉 LLM 说过的话看它认不认得出'
+    date: 2026-07-11
+    source_type: blog
+    source_url: 'https://blog.pascalschuster.de/article/do-llms-pass-the-mirror-test'
   - slug: sleep-time-compute
     title: 'Context 怎么让 agent 在睡觉时学习'
     date: 2026-07-11

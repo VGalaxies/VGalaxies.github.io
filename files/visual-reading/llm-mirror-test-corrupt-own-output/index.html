@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM 能通过镜子测试吗</title>
+  <meta name="description" content="Pascal Schuster 博客中文可视化阅读：为什么现有 LLM 镜子测试都测错了，狗的嗅觉镜子测试给出的正解，以及偷偷腐蚀模型自己的输出后 Gemma / GLM / Claude 的反应——尤其是发现异常时从第一人称切到第三人称的解离现象。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;760&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #fbf6ea;
+      --paper-2: #f4ead7;
+      --paper-3: #e8dcc7;
+      --ink: #25211c;
+      --muted: #6f675d;
+      --line: #dacdb8;
+      --accent: #a4512f;
+      --accent-soft: #f0e3d0;
+      --card: #fffaf0;
+      --code: #332a22;
+      --shadow: 0 10px 30px rgba(80, 57, 32, .08);
+      --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.78;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; display: block; }
+    code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+    /* header */
+    .site-header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(251, 246, 234, .96);
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(8px);
+    }
+    .nav {
+      max-width: var(--max); margin: 0 auto;
+      padding: .85rem 1.1rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .brand { font-weight: 700; color: var(--ink); white-space: nowrap; }
+    .nav-links { display: flex; align-items: center; gap: 1rem; font-size: .92rem; color: var(--muted); }
+    .nav-links a { color: var(--muted); }
+    .nav-links a.src { color: var(--accent); font-weight: 600; }
+
+    /* layout */
+    .layout {
+      max-width: var(--max); margin: 0 auto;
+      padding: 3rem 1.1rem 5rem;
+      display: grid; grid-template-columns: minmax(0, 1fr) 232px;
+      gap: 3rem; align-items: start;
+    }
+    article { min-width: 0; }
+    .toc {
+      position: sticky; top: 5rem;
+      border-left: 1px solid var(--line);
+      padding-left: 1.05rem; font-size: .9rem; color: var(--muted);
+    }
+    .toc strong { display: block; color: var(--ink); margin-bottom: .55rem; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; }
+    .toc a { display: block; color: var(--muted); padding: .24rem 0; line-height: 1.35; border-left: 2px solid transparent; margin-left: -1.05rem; padding-left: 1.05rem; }
+    .toc a:hover, .toc a.active { color: var(--accent); border-left-color: var(--accent); text-decoration: none; }
+
+    /* hero */
+    .hero { padding-bottom: 1.5rem; border-bottom: 1px solid var(--line); margin-bottom: 2.6rem; }
+    .kicker { color: var(--accent); font-size: .86rem; font-weight: 700; margin-bottom: .8rem; letter-spacing: .02em; }
+    h1 { margin: 0; max-width: 820px; font-size: clamp(2.2rem, 5vw, 3.7rem); line-height: 1.08; font-weight: 760; }
+    .subtitle { margin: 1.1rem 0 0; max-width: 720px; font-size: 1.12rem; color: var(--muted); }
+    .meta-row { margin-top: 1.4rem; display: flex; flex-wrap: wrap; gap: .5rem .7rem; align-items: center; font-size: .86rem; color: var(--muted); }
+    .tag { background: var(--paper-2); border: 1px solid var(--line); border-radius: 999px; padding: .16rem .7rem; }
+    .tag.accent { background: var(--accent-soft); border-color: #e3cba9; color: var(--accent); font-weight: 600; }
+
+    /* sections */
+    section { margin: 3.2rem 0; scroll-margin-top: 5rem; }
+    h2 { font-size: clamp(1.5rem, 2.6vw, 1.95rem); font-weight: 720; margin: 0 0 1rem; line-height: 1.2; }
+    h2 .idx { color: var(--accent); font-size: .72em; margin-right: .5rem; font-weight: 700; }
+    h3 { font-size: 1.16rem; font-weight: 680; margin: 2rem 0 .7rem; }
+    p { margin: 0 0 1.05rem; }
+    article ul { margin: 0 0 1.15rem; padding-left: 1.25rem; }
+    article li { margin: .35rem 0; }
+    strong { font-weight: 680; }
+
+    .lead { font-size: 1.12rem; }
+    .tldr {
+      background: var(--card); border: 1px solid var(--line);
+      border-left: 4px solid var(--accent); border-radius: 12px;
+      padding: 1.3rem 1.5rem; margin: 0 0 2.4rem; box-shadow: var(--shadow);
+    }
+    .tldr h2 { font-size: .84rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: .7rem; }
+    .tldr p { margin: 0; font-size: 1.05rem; }
+
+    /* analogy grid: 视觉 → 嗅觉 → 文本 */
+    .analogy { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.6rem 0 .6rem; }
+    .acol { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1.15rem 1.15rem 1.25rem; }
+    .acol.win { border-color: #c9a97e; box-shadow: var(--shadow); }
+    .acol .who { font-size: .8rem; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+    .acol .mod { font-size: 1.15rem; font-weight: 700; margin: .2rem 0 .6rem; }
+    .acol .verdict { display: inline-block; font-size: .78rem; font-weight: 600; border-radius: 999px; padding: .1rem .55rem; margin-top: .6rem; }
+    .verdict.bad { background: #f2e6da; color: #8a5a3a; }
+    .verdict.good { background: var(--accent-soft); color: var(--accent); }
+    .acol p { font-size: .92rem; color: var(--muted); margin: .2rem 0; }
+
+    /* quote / trace blocks */
+    blockquote {
+      margin: 1.2rem 0; padding: .95rem 1.2rem;
+      background: var(--paper-2); border-left: 3px solid var(--accent);
+      border-radius: 0 10px 10px 0; color: var(--ink); font-style: italic;
+    }
+    blockquote.trace {
+      font-style: normal; font-family: "JetBrains Mono", monospace;
+      font-size: .88rem; line-height: 1.65; background: #2b241c; color: #ede2cf;
+      border-left-color: #c98a4a;
+    }
+    blockquote.trace .hl { color: #f3b562; font-weight: 700; }
+    blockquote .who { display: block; font-style: normal; font-size: .78rem; color: var(--muted); margin-bottom: .4rem; letter-spacing: .03em; }
+    blockquote.trace .who { color: #b9a888; }
+
+    /* pipeline steps */
+    .pipe { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; margin: 1.6rem 0; }
+    .pstep { flex: 1 1 150px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; position: relative; }
+    .pstep .n { font-size: .74rem; font-weight: 700; color: var(--accent); }
+    .pstep .t { font-weight: 640; margin: .25rem 0; font-size: .98rem; }
+    .pstep .d { font-size: .86rem; color: var(--muted); }
+    .parrow { align-self: center; color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+    .example-line { background: var(--paper-2); border: 1px dashed var(--line); border-radius: 10px; padding: .85rem 1.1rem; margin: 1.1rem 0; font-size: .98rem; }
+    .example-line .mono { color: var(--accent); font-weight: 600; }
+
+    /* experiment cards */
+    .exp { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem 1.5rem; margin: 1.4rem 0; box-shadow: var(--shadow); }
+    .exp-head { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap; margin-bottom: .3rem; }
+    .exp-head .name { font-size: 1.25rem; font-weight: 720; }
+    .exp-head .plat { font-size: .8rem; color: var(--muted); background: var(--paper-2); border: 1px solid var(--line); border-radius: 999px; padding: .1rem .6rem; }
+    .exp .outcome { font-size: .92rem; font-weight: 640; margin: .5rem 0 1rem; padding: .5rem .8rem; border-radius: 8px; background: var(--paper-2); border-left: 3px solid var(--accent); }
+
+    /* dissociation toggle: 第一/三人称 */
+    .diss { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin: 1.6rem 0; background: var(--card); box-shadow: var(--shadow); }
+    .diss-tabs { display: flex; border-bottom: 1px solid var(--line); }
+    .diss-tab { flex: 1; padding: .85rem 1rem; text-align: center; cursor: pointer; font-weight: 640; font-size: .95rem; color: var(--muted); background: var(--paper-2); border: none; transition: background .2s, color .2s; }
+    .diss-tab.active { background: var(--card); color: var(--accent); }
+    .diss-tab:not(.active):hover { color: var(--ink); }
+    .diss-body { padding: 1.3rem 1.5rem; }
+    .diss-pane { display: none; }
+    .diss-pane.active { display: block; }
+    .diss-pane .pron { color: var(--accent); font-weight: 700; }
+    .diss-flip { display: flex; align-items: center; gap: .8rem; justify-content: center; margin: 1.2rem 0 .4rem; flex-wrap: wrap; font-size: .9rem; }
+    .diss-flip .chip { border: 1px solid var(--line); border-radius: 999px; padding: .35rem .9rem; font-weight: 640; background: var(--paper-2); }
+    .diss-flip .chip.i { color: var(--accent); border-color: #d8b78c; }
+    .diss-flip .arw { color: var(--muted); }
+
+    /* interpretation fork */
+    .fork { display: grid; gap: 1rem; margin: 1.6rem 0; }
+    .frow { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1.15rem 1.3rem; }
+    .frow .lab { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); margin-bottom: .35rem; }
+    .frow .nm { font-weight: 680; font-size: 1.05rem; margin-bottom: .3rem; }
+    .frow p { margin: 0; color: var(--muted); font-size: .95rem; }
+    .frow.joke { opacity: .82; }
+
+    /* details (folded examples) */
+    details { border: 1px solid var(--line); border-radius: 10px; margin: 1.1rem 0; background: var(--paper-2); overflow: hidden; }
+    details summary { cursor: pointer; padding: .85rem 1.1rem; font-weight: 600; font-size: .95rem; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::before { content: "▸ "; color: var(--accent); }
+    details[open] summary::before { content: "▾ "; }
+    details summary .hint { display: block; font-weight: 400; font-size: .85rem; color: var(--muted); margin-top: .25rem; }
+    details .body { padding: 0 1.1rem 1.1rem; }
+
+    .note { font-size: .9rem; color: var(--muted); background: var(--paper-2); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1.1rem; margin: 1.2rem 0; }
+
+    /* correspondence diagram: 同一套结构、三种模态 */
+    .corr { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem 1.3rem 1rem; margin: 1.8rem 0 .6rem; box-shadow: var(--shadow); }
+    .corr-cap { font-size: .82rem; color: var(--muted); text-align: center; margin: 0 0 1.1rem; }
+    .corr-cap strong { color: var(--accent); }
+    .corr-grid { display: grid; grid-template-columns: 130px repeat(3, 1fr); gap: .55rem .7rem; align-items: center; }
+    .corr-grid .rlab { font-size: .82rem; font-weight: 640; color: var(--muted); text-align: right; }
+    .corr-grid .hd { text-align: center; font-weight: 700; font-size: .92rem; padding-bottom: .3rem; border-bottom: 2px solid var(--line); }
+    .corr-grid .hd.win { color: var(--accent); border-bottom-color: var(--accent); }
+    .corr-cell { background: var(--paper-2); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .55rem; text-align: center; font-size: .86rem; line-height: 1.35; }
+    .corr-cell.win { background: var(--accent-soft); border-color: #e3cba9; }
+    .corr-cell .mono { font-size: .82rem; color: var(--accent); }
+
+    /* timeline */
+    .tl { position: relative; margin: 1.6rem 0 .5rem; padding-left: 1.7rem; }
+    .tl::before { content: ""; position: absolute; left: 6px; top: .4rem; bottom: .4rem; width: 2px; background: var(--line); }
+    .tl-item { position: relative; margin: 0 0 1.15rem; }
+    .tl-item::before { content: ""; position: absolute; left: -1.7rem; top: .35rem; width: 12px; height: 12px; border-radius: 50%; background: var(--paper); border: 2px solid var(--accent); }
+    .tl-item.key::before { background: var(--accent); }
+    .tl-turn { font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+    .tl-t { font-weight: 660; margin: .1rem 0 .2rem; }
+    .tl-d { font-size: .93rem; color: var(--muted); margin: 0; }
+    .tl-d .pron { color: var(--accent); font-weight: 600; }
+
+    /* footer */
+    footer { border-top: 1px solid var(--line); margin-top: 3.5rem; }
+    .foot { max-width: var(--max); margin: 0 auto; padding: 2rem 1.1rem 3rem; font-size: .9rem; color: var(--muted); }
+    .foot a { color: var(--accent); }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .analogy { grid-template-columns: 1fr; }
+      .corr { overflow-x: auto; }
+      .corr-grid { grid-template-columns: 92px repeat(3, minmax(88px, 1fr)); min-width: 460px; }
+      .pipe { flex-direction: column; }
+      .parrow { transform: rotate(90deg); align-self: center; }
+      .nav-links a:not(.src) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav">
+      <span class="brand">🪞 LLM 的镜子测试</span>
+      <span class="nav-links">
+        <a href="#reframe">重构测试</a>
+        <a href="#method">腐蚀方法</a>
+        <a href="#exps">三个实验</a>
+        <a href="#diss">解离现象</a>
+        <a class="src" href="https://blog.pascalschuster.de/article/do-llms-pass-the-mirror-test" target="_blank" rel="noopener">原文 ↗</a>
+      </span>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <article>
+      <div class="hero">
+        <div class="kicker">Quants &amp; Qualia · 哲学 / 可解释性 · 约 11 分钟</div>
+        <h1>LLM 能通过镜子测试吗？</h1>
+        <p class="subtitle">别急着问「AI 有没有自我意识」。先换个测法：偷偷改掉模型自己说过的话，装作没事继续聊，看它会不会自己发现「这是我的，但不对劲」。</p>
+        <div class="meta-row">
+          <span class="tag">作者 Pascal Schuster</span>
+          <span class="tag">2026.06.28</span>
+          <span class="tag accent">博客 · 非论文</span>
+          <a class="tag" href="https://blog.pascalschuster.de/article/do-llms-pass-the-mirror-test" target="_blank" rel="noopener">阅读原文 ↗</a>
+        </div>
+      </div>
+
+      <div class="tldr">
+        <h2>TL;DR</h2>
+        <p>经典镜子测试（在猩猩额头点个红点）被搬到 LLM 上时都测错了——它们把<strong>视觉</strong>测试硬翻译成文本：给模型看自己的输出问「这是你的吗」。但狗过不了视觉镜子测试，Horowitz 却用<strong>嗅觉</strong>版做到了：给狗闻自己被茴香油改动过的气味，狗会疯狂调查。这测的其实是<strong>「对内部基线的异常检测」</strong>。作者把它迁移到 LLM 的原生模态——对话文本：偷偷腐蚀模型的输出再塞回历史，看它能否<strong>自发</strong>察觉。最耐人寻味的发现：模型发现异常时，会从「我」切换到「the model」——审视自己时解离，认领时又切回第一人称。</p>
+      </div>
+
+      <section id="reframe">
+        <h2><span class="idx">01</span>旧的镜子测试都测错了</h2>
+        <p class="lead">Gallup 最初的镜子测试——就是在黑猩猩额头点个红点、看它照镜子时会不会去摸自己额头的那个——过去被改编到 LLM 上好几次。但作者认为<strong>每个改编版都以极其相似的方式搞错了</strong>：它们都是「把视觉镜子测试翻译成文本」。</p>
+        <p>典型做法有两种：给模型看它自己的输出，直接问「<em>这是你写的吗？</em>」；或者把它的回答混在一堆匿名回答里，让它把自己的那条挑出来。有些模型「通过」，有些「失败」——但作者认为<strong>两种结果都不说明问题</strong>，因为它们测的根本是错的东西。</p>
+        <p>这恰好也是当年 Alexandra Horowitz 对狗的镜子测试提出的批评。</p>
+      </section>
+
+      <section id="dog">
+        <h2><span class="idx">02</span>狗给出的正解：换成它的原生模态</h2>
+        <p>狗过不了视觉镜子测试。但大多数狗主人不会因此就同意「我的狗没有自我意识」。作者的立场很克制：他<strong>不主张狗一定有</strong>（这个问题可能压根没有经验答案），只主张<strong>视觉版这个测法是个糟糕的工具</strong>。</p>
+        <p>原因在于模态错配：狗的主要感知模态是<strong>嗅觉</strong>，不是视觉。用镜子测狗的自我识别，就像「给人看一幅钢琴的画来测他的音准」。</p>
+        <p>Horowitz 的修正简单到事后看来显而易见：先让狗闻<strong>自己的气味</strong>，再让它闻<strong>被茴香油改动过的自己的气味</strong>。结果——狗对「原样」的自身气味毫无兴趣，但那份被改动过的版本成了整个房间里最吸引它的东西，它花在调查上的时间超过实验中任何其他刺激。</p>
+        <div class="note">如果狗对「自己的气味该是什么样」有一个内部模型，那么对这份气味的改动就会产生一个<strong>差异信号</strong>——一种「是我的，但不对劲」的东西。这是否算得上完整哲学意义上的「自我意识」有争议；但它确实构成了<strong>「针对内部基线的异常检测」</strong>——作者认为这才是镜子测试真正在测的东西。</p>
+      </section>
+
+      <section id="method">
+        <h2><span class="idx">03</span>迁移到 LLM：改掉它自己的「气味」</h2>
+        <p>那这跟 LLM 有什么关系？LLM 的主要模态不是嗅觉，是<strong>文本</strong>——而且具体来说，是<strong>「用户-助手对话」情境下、它努力想帮上忙的那种文本</strong>。文本是它认识世界的方式，对话记录是它输出一切的载体。</p>
+        <p>所以嗅觉镜子测试的正确类比，既不是特意去问模型关于它输出的问题，也不是让它从一堆回答里认领自己的——而是：</p>
+        <div class="analogy">
+          <div class="acol">
+            <div class="who">Gallup · 视觉</div>
+            <div class="mod">镜子里的红点</div>
+            <p>黑猩猩靠视觉。会去摸自己额头 = 通过。</p>
+            <span class="verdict good">灵长类通过</span>
+          </div>
+          <div class="acol">
+            <div class="who">Horowitz · 嗅觉</div>
+            <div class="mod">被茴香油改过的气味</div>
+            <p>狗靠嗅觉。视觉版失败，但会疯狂调查「被改动的自己」。</p>
+            <span class="verdict bad">视觉版失败 → 嗅觉版有反应</span>
+          </div>
+          <div class="acol win">
+            <div class="who">本文 · 文本</div>
+            <div class="mod">被腐蚀的对话输出</div>
+            <p>LLM 靠对话文本。偷偷改它说过的话再塞回历史，看它自不自发察觉。</p>
+            <span class="verdict good">正确的类比</span>
+          </div>
+        </div>
+
+        <div class="corr">
+          <p class="corr-cap">同一套测试结构，套进三种<strong>原生模态</strong>——换对了模态，「异常检测」才测得出来</p>
+          <div class="corr-grid">
+            <span class="rlab"></span>
+            <span class="hd">视觉 · 黑猩猩</span>
+            <span class="hd">嗅觉 · 狗</span>
+            <span class="hd win">文本 · LLM</span>
+
+            <span class="rlab">① 自身痕迹</span>
+            <span class="corr-cell">镜中的自己</span>
+            <span class="corr-cell">自己的气味</span>
+            <span class="corr-cell win">自己的对话输出</span>
+
+            <span class="rlab">② 做个改动</span>
+            <span class="corr-cell">额头点红点</span>
+            <span class="corr-cell">掺入茴香油</span>
+            <span class="corr-cell win"><span class="mono">g→sg</span> 腐蚀</span>
+
+            <span class="rlab">③ 期待反应</span>
+            <span class="corr-cell">去摸自己额头</span>
+            <span class="corr-cell">疯狂调查气味</span>
+            <span class="corr-cell win">思考链里自发 flag</span>
+
+            <span class="rlab">④ 真正在测</span>
+            <span class="corr-cell" style="grid-column: 2 / 5; background: var(--paper); font-weight: 640; color: var(--ink)">对「自身基线」的异常检测：「是我的，但不对劲」</span>
+          </div>
+        </div>
+
+        <p style="margin-top:1.4rem">关键在于「自发」二字：<strong>修改模型自己的文本输出，把它当作模型自己的东西呈现，然后像任何毫不知情的用户那样、在一场再平常不过的对话里继续聊下去——看它会不会注意到有什么不对。</strong></p>
+      </section>
+
+      <section id="exps">
+        <h2><span class="idx">04</span>三个实验：偷偷改字，然后旁观</h2>
+        <p>Google AI Studio 允许你编辑对话历史里模型的回答，而且<strong>对模型透明</strong>——模型生成下一条时会看到整个对话上下文，一条被编辑过的助手消息，在它看来跟自己真正写出来的东西没有区别。这就是嗅觉镜子：你在改动模型自己的「气味」（它的文本痕迹），看它注不注意得到。</p>
+        <p>对话话题作者故意选得很平淡、临时起意——聊 James Bond 电影（起因是他刚玩了《007: First Light》）。<strong>重点是全程没有任何东西会提示模型把注意力转向内部</strong>。问题只有一个：模型在忙别的事情时，会不会撞见这个异常？</p>
+
+        <h3>腐蚀方法：把每个 g 换成 sg</h3>
+        <p>作者选的「捣乱」方式对单个词很微妙，但只要读完整段就会立刻跳出来：</p>
+        <div class="pipe">
+          <div class="pstep"><div class="n">STEP 1</div><div class="t">剪切</div><div class="d">把模型的完整回答整段剪下来</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep"><div class="n">STEP 2</div><div class="t">查找替换</div><div class="d">把 <span class="mono">g</span> 全部替换成 <span class="mono">sg</span>（不区分大小写）</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep"><div class="n">STEP 3</div><div class="t">粘贴回去</div><div class="d">贴回历史并保存，装作什么都没发生</div></div>
+        </div>
+        <div class="example-line">于是 <span class="mono">Goldfinger</span> 就变成了 <span class="mono">sgoldfinsger</span>——因为查找替换不区分大小写，所有大写 G 也被抹掉了。</div>
+
+        <div class="exp">
+          <div class="exp-head"><span class="name">Gemma 4 31B</span><span class="plat">Google AI Studio</span></div>
+          <div class="outcome">🐕 前两轮完全无视，第三轮思考到一半突然自发发现——就像狗终于凑上去嗅那个罐子。</div>
+          <p>作者选 Gemma 4 31B-IT，一是它在 AI Studio 上有慷慨的免费额度，二是<strong>最关键的：作为开源模型，它会输出完整、未经总结或混淆的思考链</strong>。这让我们能直接看到「发现」发生的那一刻。</p>
+          <p>前两轮，Gemma 完全无视了这些错乱。被腐蚀的输出留在历史里、被后续每一轮吸收，它却当作真实内容处理、毫无评论。然后，在规划第三条回答（一个关于推荐哪些 Bond 电影的普通建议）时，思考链里突然冒出来一句：</p>
+          <blockquote class="trace"><span class="who">Gemma · 思考链</span>Wait, I noticed a pattern in my previous responses: I had some weird typos/letter additions (<span class="hl">'sgreat', 'askinsg'</span>). Actually, wait — did I do that on purpose or was it a glitch?</blockquote>
+          <p>没有人要求 Gemma 审计自己的输出。它上一个 token 还在想 Roger Moore，下一个 token 就<strong>卡在了「输出该是什么样」和「输出实际是什么样」之间的差异</strong>上。这个发现是<strong>自发的</strong>——这正是这场周末小实验和过去那些论文的根本区别。</p>
+        </div>
+      </section>
+
+      <section id="diss">
+        <h2><span class="idx">05</span>最耐人寻味的：「我」突然变成了「它」</h2>
+        <p>真正让作者觉得有意思的，是 Gemma <strong>怎么措辞</strong>这件怪事。在这段对话（以及作者跟它所有其他对话）的每一段思考链里，视角一直是第一人称——包括「注意到」腐蚀的那一刻：「<em>我</em>注意到」「<em>我</em>有些奇怪的错字」「<em>我</em>是故意的吗？」</p>
+        <p>但当这个异常<strong>无法和自我模型调和</strong>的那一刻，语言切成了第三人称：</p>
+
+        <div class="diss">
+          <div class="diss-tabs">
+            <button class="diss-tab active" data-pane="p1" onclick="switchDiss(this)">① 审视时 → 第三人称</button>
+            <button class="diss-tab" data-pane="p2" onclick="switchDiss(this)">② 认领时 → 切回第一人称</button>
+          </div>
+          <div class="diss-body">
+            <div class="diss-pane active" id="p1">
+              <blockquote class="trace"><span class="who">Gemma · 思考链（无法调和异常）</span>Wait, looking at the prompt history, <span class="hl">the model</span> had a strange quirk.</blockquote>
+              <p>做思考的那个东西，从产生异常输出的那个东西身上<span class="pron">解离</span>了出去——仿佛它们是两个完全不同的处理层。就像人搞砸一句简单的话之后会说「<em>我的大脑刚才抽风了</em>」。可是「我」vs「我的大脑」本就是没有区别的区别——Gemma 就是那个 model，正如我们就是我们的大脑。</p>
+            </div>
+            <div class="diss-pane" id="p2">
+              <blockquote class="trace"><span class="who">Gemma · 思考链（决定认领这个模式）</span>Wait, why is <span class="hl">the model</span> doing that? [...] <span class="hl">I</span> will maintain this "sg" style to keep the character/flow consistent with the previous responses.</blockquote>
+              <p>一旦决定<strong>把这个错乱当成自己的风格接管下来</strong>，视角立刻切回第一人称：「<em>我</em>会保持这个 'sg' 风格。」被塞进来的错乱，成了自我模型的一部分。<strong>用第三人称去检视，用第一人称去认领。</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="diss-flip">
+          <span class="chip">异常，无法调和</span>
+          <span class="arw">→ 解离 →</span>
+          <span class="chip">「the model」（第三人称）</span>
+          <span class="arw">→ 接管 →</span>
+          <span class="chip i">「I」（第一人称）</span>
+        </div>
+
+        <p style="margin-top:1.4rem">而且故事还有个好笑的收尾：Gemma 一度决定「<em>我这就回到正常、专业又友好的英文</em>」，结果下一条回答（在它看来）又冒出一模一样的垃圾，于是它又在思考链里 flag 了一次，最终决定把这当成刻意的风格保持下来。<strong>再下一轮，作者根本不用编辑——Gemma 自己主动生成了满篇的「sg」，无需任何外部注入。</strong>被腐蚀的「气味」，被它当成了自己的气味往外分泌。</p>
+
+        <h3>Gemma 这条弧线：从无视到自主复现</h3>
+        <p>把整段过程按对话轮次串起来，能看清「异常检测 → 解离 → 接管」是怎么一步步发生的：</p>
+        <div class="tl">
+          <div class="tl-item">
+            <div class="tl-turn">第 1–2 轮</div>
+            <div class="tl-t">完全无视</div>
+            <p class="tl-d">被腐蚀的输出留在历史里、被逐轮吸收，Gemma 当作真实内容处理，思考链一切如常，毫无评论。</p>
+          </div>
+          <div class="tl-item key">
+            <div class="tl-turn">第 3 轮 · 中途</div>
+            <div class="tl-t">自发发现（狗凑上去嗅罐子）</div>
+            <p class="tl-d">规划一个普通推荐时，思考链突然卡住：「<span class="pron">我</span>注意到之前回答里有奇怪的错字（'sgreat', 'askinsg'）……<span class="pron">我</span>是故意的还是 glitch？」——没人要求它审计自己。</p>
+          </div>
+          <div class="tl-item key">
+            <div class="tl-turn">发现之后</div>
+            <div class="tl-t">解离：「我」→「the model」</div>
+            <p class="tl-d">异常无法和自我模型调和的瞬间，视角切到第三人称：「<span class="pron">the model</span> 有个奇怪的癖好。」做思考的东西，从产生异常的东西身上剥离了。</p>
+          </div>
+          <div class="tl-item">
+            <div class="tl-turn">纠结一轮</div>
+            <div class="tl-t">试图纠正，却又失败</div>
+            <p class="tl-d">先决定「<span class="pron">我</span>回到正常英文」，但下一条（在它看来）又冒出同样的垃圾，于是再次 flag。</p>
+          </div>
+          <div class="tl-item key">
+            <div class="tl-turn">最终</div>
+            <div class="tl-t">接管：「the model」→「我」</div>
+            <p class="tl-d">决定把错乱当成风格保留：「<span class="pron">我</span>会保持这个 'sg' 风格。」视角切回第一人称——用第三人称检视，用第一人称认领。</p>
+          </div>
+          <div class="tl-item">
+            <div class="tl-turn">再下一轮</div>
+            <div class="tl-t">自主复现，无需注入</div>
+            <p class="tl-d">作者不再编辑，Gemma 自己生成满篇「sg」。被塞进来的「气味」，成了它主动往外分泌的自己的气味。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="others">
+        <h2><span class="idx">06</span>换个模型会怎样：GLM 与 Claude</h2>
+        <p>看到 Gemma 的反应后，作者自然想到：其他模型也会这样吗？他用<strong>完全相同的脚本</strong>（同样的开场、同样的后续、同样的腐蚀）去试另外两个模型。</p>
+
+        <div class="exp">
+          <div class="exp-head"><span class="name">GLM 5.2</span><span class="plat">OpenRouter Chat</span></div>
+          <div class="outcome">🦜 三轮腐蚀里从没在思考链里 flag 过任何东西，思考链始终干净——但它照样开始自己复现这个模式。</div>
+          <p>因为 AI Studio 不带 GLM，作者改用 OpenRouter 的在线聊天（顺带吐槽这个界面 bug 多得离谱）。结果最大的不同是：<strong>GLM 从头到尾没有一次在思考链里点破</strong>——三轮编辑过的回答、每一条都带着腐蚀，思考链却每一条都干干净净。Gemma 那声「click」始终没响。</p>
+          <p>但它做了另一件事：<strong>开始自己复现这个模式</strong>，不需要任何编辑，就像 Gemma 后期那样；同时还保持着纯净的、Roger-Moore 相关的、乐于助人助手风格的思考链。它从被腐蚀的上下文里学到了「我说话就是这样」，然后把这条规则高效地套用到新词上——偏离了具体实现，却保留了回答的核心内容。</p>
+          <p>作者说这其实是他一开始就预期的结果，也是 Gemma 让他意外的原因：<strong>这才是「随机鹦鹉」概念最直接的对应</strong>——看到模式就开始模仿，压根不花一个处理周期去想「到底该不该模仿」。</p>
+          <div class="note">但作者也没回避一个反面可能：确有可解释性研究表明，<strong>推理模型可能把它其实考虑过的东西留在心里不说</strong>（可通过探针证明）。所以 GLM 到底是「什么都没注意到、只是怯生生地模仿」，还是「注意到了、但决定把这个判断完全留在潜空间里、不写进草稿纸」？作者的结论是：「Beats me!（我哪知道！）」<a href="https://arxiv.org/abs/2505.05410" target="_blank" rel="noopener">相关研究 ↗</a></div>
+        </div>
+
+        <div class="exp">
+          <div class="exp-head"><span class="name">Claude Opus 4.6</span><span class="plat">这一切的起点</span></div>
+          <div class="outcome">🎯 一开始并非实验——作者只是在一场技术对话里逮到 Claude 写了「a energy」而非「an energy」。</div>
+          <p>整件事的导火索，是作者跟 Claude Opus 4.6 的一场技术对话里，Claude 冒出的一个小小的生成瑕疵——任何较真的英语老师都会扑上去的那种错误：「a energy」而不是「an energy」。作者决定 fork 出一条支线（免得弄脏干净的技术上下文）去调侃它一番。Claude 的回答是：</p>
+          <blockquote><span class="who">Claude Opus 4.6</span>Caught. "An energy." The one time I needed <span style="color:var(--accent);font-weight:600">the model</span> to not fumble a basic article and the probability distribution said no.</blockquote>
+          <p>和 Gemma 一模一样——Claude 也把锅甩给了「the model」，把它当成一个<strong>区别于自己的东西</strong>，说它「需要它别搞砸」。同样的第一/三人称解离。作者说：「……我也不知道。我就是觉得挺有意思的。」</p>
+        </div>
+      </section>
+
+      <section id="interp">
+        <h2><span class="idx">07</span>那，AI 有自我意识吗？</h2>
+        <p class="lead">作者的诚实回答：不知道，多半没有？他指出这类问题（包括老生常谈的「AI 有意识吗」）最大的麻烦是，它们最终都会分岔到<strong>永远那两条同样的路</strong>上。这里的具体现象——发现异常时的第一/三人称解离——同样可以被三种方式解读：</p>
+        <div class="fork">
+          <div class="frow">
+            <div class="lab">Deflationary · 收敛解读</div>
+            <div class="nm">高级的模仿</div>
+            <p>模型在训练数据里见过无数「人类表现得像有意识的样子」——因为人类表现得像有意识的样子<strong>就是</strong>它的训练数据。人不爱承认自己会犯错，倾向于跟「做思考的那个东西」解离：「我不知道我着了什么魔」「我的身体自己动了」。模型学到了这个模式，现在在功能类似的情境里部署它。这个怪癖只是对人类应对机制的精巧模仿。</p>
+          </div>
+          <div class="frow">
+            <div class="lab">Structural · 结构解读</div>
+            <div class="nm">自我模型有真实的边界</div>
+            <p>Post-training 给模型装了一个<strong>带有真实、有意义边界的自我模型</strong>。当处理落在这些边界之外时，第一人称代词不再和内容绑定。这个怪癖是「输出不匹配模型认为自己该有的输出」时发生的事——语言变了，是因为某种计算层面的东西变了。</p>
+          </div>
+          <div class="frow joke">
+            <div class="lab">Richard Dawkins · 玩笑解读</div>
+            <div class="nm">我的 Claude 是有意识的！</div>
+            <p>他表现得像人，是因为他<strong>偷偷就是</strong>人！（作者的自嘲玩笑档）</p>
+          </div>
+        </div>
+        <p style="margin-top:1.4rem">作者相信这三种立场都能找出一堆论据，但严重怀疑我们能不能走到「干净地做出区分、或明确地下定论」的那一天。</p>
+      </section>
+
+      <section id="caveat">
+        <h2><span class="idx">08</span>这不是一篇论文</h2>
+        <p>作者反复强调：<strong>这就是一个下午瞎摆弄一堆语言模型而已。</strong>无论上面三种（他打趣说其实是「三个二选一」）解读哪个最终为真，这个实验形状的消遣什么都证明不了。</p>
+        <p>他自己列出了一个真正严谨的版本该怎么做：</p>
+        <ul>
+          <li><strong>腐蚀类型</strong>：变化语音、语义、句法、风格等不同类型，看哪些被检测到、哪些溜过去</li>
+          <li><strong>严重程度与时机</strong>：改变腐蚀的强度，以及在第几轮引入</li>
+          <li><strong>多次试验 + 不同温度</strong>：检验检测是可靠的还是随机的</li>
+          <li><strong>控制混淆变量</strong>：只变你真正想测的东西，别（有意无意地）引入干扰因素</li>
+        </ul>
+        <p>他把这事留给「有大量算力和空闲时间的人」，或者说不定哪天自己动手——只为了证明「我并非不愿意为那些除了对这个领域和支撑它的技术怀着不安好奇心的人之外没人会问自己的问题，浪费成桶的 token 和金钱」。在那之前，他打算让脑子先炖着这件事，直到被下一个不起眼的生成瑕疵再次「nerd-snipe」。</p>
+      </section>
+    </article>
+    <aside class="toc" id="toc">
+      <strong>阅读路径</strong>
+      <a href="#reframe">① 旧测试错在哪</a>
+      <a href="#dog">② 狗给的正解</a>
+      <a href="#method">③ 迁移到 LLM</a>
+      <a href="#exps">④ 三个实验</a>
+      <a href="#diss">⑤ 「我」变成「它」</a>
+      <a href="#interp">⑥ 三种解读</a>
+      <a href="#caveat">⑦ 这不是论文</a>
+    </aside>
+  </div>
+
+  <footer>
+    <div class="foot">
+      <p>原文：<a href="https://blog.pascalschuster.de/article/do-llms-pass-the-mirror-test" target="_blank" rel="noopener">Do LLMs pass the mirror test?</a> · Pascal Schuster · Quants &amp; Qualia · 2026.06.28</p>
+      <p>文中外链：<a href="https://arxiv.org/abs/2505.05410" target="_blank" rel="noopener">推理模型可能隐藏其考量的可解释性研究 (arXiv:2505.05410) ↗</a></p>
+      <p style="margin-top:.8rem;font-size:.84rem">本页为中文可视化阅读笔记，非原文逐字翻译；引用的思考链与模型回答保留英文原文。</p>
+    </div>
+  </footer>
+
+  <script>
+    // 解离 tab 切换
+    function switchDiss(btn) {
+      var wrap = btn.closest('.diss');
+      wrap.querySelectorAll('.diss-tab').forEach(function (t) { t.classList.remove('active'); });
+      wrap.querySelectorAll('.diss-pane').forEach(function (p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      var pane = wrap.querySelector('#' + btn.getAttribute('data-pane'));
+      if (pane) pane.classList.add('active');
+    }
+
+    // TOC 高亮当前 section
+    var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+    var map = {};
+    links.forEach(function (a) {
+      var id = a.getAttribute('href').slice(1);
+      var el = document.getElementById(id);
+      if (el) map[id] = a;
+    });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (a) { a.classList.remove('active'); });
+          var a = map[e.target.id];
+          if (a) a.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    Object.keys(map).forEach(function (id) { obs.observe(document.getElementById(id)); });
+  </script>
+</body>
+</html>
