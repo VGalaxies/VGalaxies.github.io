@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: trustworthy-agent-benchmarks
+    title: 'AI Agent benchmark 怎么被刷出虚假高分'
+    date: 2026-07-12
+    source_type: blog
+    source_url: 'https://moogician.github.io/blog/2026/trustworthy-benchmarks-cont/'
   - slug: working-with-ai-understanding-architecture
     title: '会用 AI 修 Bug，为什么还得懂架构'
     date: 2026-07-11
