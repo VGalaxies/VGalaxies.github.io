@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SGLang 团队 96 张 H100 部署 DeepSeek-V3 的中文可视化阅读：PD 分离、大规模专家并行、DeepEP、DeepGEMM、TBO 与 EPLB 如何组成一套系统。">
+  <title>96 张 H100 不是答案：SGLang 如何拆开 DeepSeek 推理瓶颈</title>
+  <style>
+    :root {
+      --canvas: oklch(96.8% 0.018 82);
+      --paper: oklch(98.3% 0.012 82);
+      --paper-2: oklch(93.5% 0.028 78);
+      --paper-3: oklch(88.8% 0.042 72);
+      --ink: oklch(23% 0.018 58);
+      --ink-soft: oklch(42% 0.025 58);
+      --muted: oklch(53% 0.018 58);
+      --line: oklch(84% 0.035 75);
+      --accent: oklch(48% 0.115 47);
+      --accent-strong: oklch(39% 0.12 43);
+      --accent-soft: oklch(91% 0.05 65);
+      --shadow-1: 0 1px 3px rgba(74,48,24,.11), 0 9px 26px rgba(74,48,24,.055);
+      --shadow-2: 0 18px 55px rgba(74,48,24,.11);
+      --r-sm: 6px;
+      --r-md: 12px;
+      --r-lg: 20px;
+      --r-pill: 999px;
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: linear-gradient(rgba(103,73,43,.035) 1px, transparent 1px), var(--canvas);
+      background-size: 100% 38px;
+      font-family: "Avenir Next", -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      pointer-events: none;
+      opacity: .2;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
+    }
+    a { color: var(--accent-strong); text-decoration-thickness: 1px; text-underline-offset: .18em; }
+    a:hover { color: var(--accent); }
+    img { display: block; max-width: 100%; height: auto; }
+    button, summary, a { touch-action: manipulation; }
+    button, summary { font: inherit; }
+    button:focus-visible, a:focus-visible, summary:focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--accent) 38%, transparent);
+      outline-offset: 3px;
+    }
+    p { margin: 0 0 1.05rem; text-wrap: pretty; }
+    strong { font-weight: 730; }
+    code, pre, .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .skip-link {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      z-index: 50;
+      padding: .65rem .9rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      transform: translateY(-160%);
+      transition: transform 160ms cubic-bezier(.16,1,.3,1);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: color-mix(in oklch, var(--canvas) 94%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 74%, transparent);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.2rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Songti SC", "STSong", serif;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .nav { display: flex; align-items: center; gap: 1rem; font-size: .84rem; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a.active, .nav a:hover { color: var(--accent-strong); }
+    .nav .source-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .85rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: var(--r-pill);
+    }
+    .shell {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0,1fr) 215px;
+      gap: 4rem;
+      padding: 4.5rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.4rem;
+      align-self: start;
+      padding-top: .4rem;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .toc-title {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: .8rem;
+      color: var(--ink-soft);
+      font-size: .72rem;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .toc-title::before { content: ""; width: 22px; height: 2px; background: var(--accent); }
+    .toc a {
+      display: block;
+      min-height: 36px;
+      padding: .42rem .2rem .42rem 1rem;
+      color: var(--muted);
+      border-left: 1px solid var(--line);
+      text-decoration: none;
+      line-height: 1.35;
+    }
+    .toc a.active { color: var(--accent-strong); border-left-color: var(--accent); font-weight: 650; }
+    .hero { padding: 0 0 4rem; border-bottom: 1px solid var(--line); }
+    .eyebrow {
+      margin-bottom: 1rem;
+      color: var(--accent-strong);
+      font-size: .76rem;
+      font-weight: 760;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 { font-family: "Iowan Old Style", "Songti SC", "STSong", serif; text-wrap: balance; }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(3rem,6.4vw,6.15rem); font-weight: 650; line-height: 1.01; }
+    .hero-subtitle {
+      max-width: 760px;
+      margin: 1.5rem 0 0;
+      color: var(--ink-soft);
+      font-size: clamp(1.02rem,1.5vw,1.2rem);
+      line-height: 1.72;
+    }
+    .meta { display: flex; flex-wrap: wrap; gap: .45rem .7rem; margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
+    .meta span { padding: .18rem .62rem; background: color-mix(in oklch,var(--paper) 70%,transparent); border: 1px solid var(--line); border-radius: var(--r-pill); }
+    .hero-ledger {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 1fr 1.15fr;
+      margin-top: 3rem;
+      background: var(--ink);
+      border-radius: var(--r-lg);
+      overflow: clip;
+      box-shadow: var(--shadow-2);
+    }
+    .ledger-cell { min-height: 145px; padding: 1.25rem; color: var(--paper); }
+    .ledger-cell + .ledger-cell { border-left: 1px solid rgba(255,255,255,.14); }
+    .ledger-cell strong { display: block; margin-bottom: .42rem; font-size: clamp(1.85rem,3vw,2.75rem); line-height: 1; font-variant-numeric: tabular-nums; }
+    .ledger-cell span { display: block; color: color-mix(in oklch,var(--paper) 73%,transparent); font-size: .82rem; line-height: 1.5; }
+    .ledger-cell:first-child strong { color: var(--accent-soft); }
+    section { margin: 5.4rem 0; scroll-margin-top: 5rem; }
+    .section-kicker { color: var(--accent-strong); font-size: .74rem; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin: .35rem 0 .8rem; font-size: clamp(2rem,4.5vw,4rem); font-weight: 650; line-height: 1.08; }
+    h3 { margin: 2rem 0 .55rem; font-size: clamp(1.3rem,2.2vw,1.8rem); font-weight: 650; line-height: 1.2; }
+    .section-deck { max-width: 720px; margin: .7rem 0 0; color: var(--muted); font-size: .98rem; }
+    .lead { font-size: 1.08rem; color: var(--ink-soft); }
+    .reading-column { max-width: 760px; }
+    .tldr { margin-top: 2rem; padding: 1.5rem; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-1); }
+    .tldr-row { display: grid; grid-template-columns: 110px 1fr; gap: 1.2rem; padding: 1rem 0; }
+    .tldr-row + .tldr-row { border-top: 1px solid var(--line); }
+    .tldr-row b { color: var(--accent-strong); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+    .tldr-row p { margin: 0; color: var(--ink-soft); }
+    .problem-chain {
+      display: grid;
+      grid-template-columns: repeat(3,minmax(0,1fr));
+      gap: 1px;
+      margin: 2rem 0;
+      overflow: clip;
+      background: var(--line);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-1);
+    }
+    .problem { padding: 1.4rem; background: var(--paper); }
+    .problem-num { color: var(--accent); font-size: .72rem; font-weight: 760; letter-spacing: .1em; }
+    .problem h3 { margin: .45rem 0 .5rem; font-family: inherit; font-size: 1.02rem; font-weight: 740; }
+    .problem p { margin: 0; color: var(--muted); font-size: .89rem; }
+    .source-figure { margin: 2rem 0; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-1); overflow: clip; }
+    .source-figure img { width: 100%; background: #fff; image-orientation: none; outline: 1px solid rgba(0,0,0,.08); outline-offset: -1px; }
+    .figure-caption { padding: 1rem 1.15rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .figure-caption p { margin: 0; color: var(--ink-soft); font-size: .88rem; }
+    .fig-toggle {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: .35rem .7rem;
+      color: var(--accent-strong);
+      background: transparent;
+      border: 0;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 700;
+    }
+    .figure-detail { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 260ms cubic-bezier(.16,1,.3,1); }
+    .figure-detail > div { overflow: hidden; }
+    .source-figure.open .figure-detail { grid-template-rows: 1fr; }
+    .figure-detail ul { margin: 0 1rem 1rem; padding: 1rem 1rem 1rem 2rem; background: var(--paper-2); border-radius: var(--r-md); }
+    .figure-detail li { margin: .45rem 0; color: var(--ink-soft); font-size: .88rem; }
+    .architecture-note { display: grid; grid-template-columns: 3fr 9fr; gap: 1px; margin: 1.4rem 0; overflow: clip; background: var(--line); border-radius: var(--r-md); }
+    .architecture-note div { padding: 1rem; background: var(--paper-2); }
+    .architecture-note b { display: block; color: var(--accent-strong); font-size: 1.2rem; }
+    .architecture-note span { color: var(--muted); font-size: .85rem; }
+    .layer-map { margin: 2rem 0; background: var(--ink); border-radius: var(--r-lg); padding: 1px; box-shadow: var(--shadow-2); }
+    .layer-row { display: grid; grid-template-columns: 160px 110px 1fr; gap: 1px; }
+    .layer-row + .layer-row { border-top: 1px solid rgba(255,255,255,.12); }
+    .layer-row > div { padding: 1rem 1.1rem; color: var(--paper); }
+    .layer-name { font-weight: 730; }
+    .layer-choice { color: var(--accent-soft) !important; font-family: "SFMono-Regular",Consolas,monospace; font-weight: 750; }
+    .layer-reason { color: color-mix(in oklch,var(--paper) 72%,transparent) !important; font-size: .87rem; }
+    .phase-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 2rem 0; }
+    .phase { padding: 1.35rem; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-1); }
+    .phase-label { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+    .phase-label b { font-family: "Iowan Old Style","Songti SC",serif; font-size: 1.45rem; }
+    .phase-label span { color: var(--accent-strong); font-family: "SFMono-Regular",Consolas,monospace; font-size: .72rem; }
+    .phase ul { margin: 1rem 0 0; padding-left: 1.15rem; color: var(--ink-soft); font-size: .9rem; }
+    .phase li { margin: .45rem 0; }
+    .compat-wrap { margin: 1.6rem 0; overflow-x: auto; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-1); }
+    table { width: 100%; border-collapse: collapse; min-width: 670px; font-size: .88rem; }
+    th, td { padding: .85rem 1rem; border-bottom: 1px solid color-mix(in oklch,var(--line) 70%,transparent); text-align: left; vertical-align: top; }
+    th { color: var(--muted); background: var(--paper-2); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+    td:not(:first-child), th:not(:first-child) { text-align: center; }
+    .yes { color: var(--accent-strong); font-weight: 750; }
+    .no { color: var(--muted); }
+    .mechanism-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; margin: 2rem 0; }
+    .mechanism { padding: 1.3rem; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-1); }
+    .mechanism .tag { color: var(--accent-strong); font-family: "SFMono-Regular",Consolas,monospace; font-size: .72rem; font-weight: 750; }
+    .mechanism h3 { margin: .5rem 0 .6rem; font-family: inherit; font-size: 1.05rem; font-weight: 750; }
+    .mechanism p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .insight-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 1.8rem 0; background: var(--line); border-radius: var(--r-lg); overflow: clip; }
+    .insight { padding: 1.35rem; background: var(--paper-2); }
+    .insight b { display: block; margin-bottom: .35rem; color: var(--accent-strong); }
+    .insight p { margin: 0; color: var(--ink-soft); font-size: .9rem; }
+    .result-ledger { margin: 2rem 0; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-1); overflow: clip; }
+    .result-row { display: grid; grid-template-columns: 145px 1fr 115px; gap: 1rem; align-items: center; padding: 1.05rem 1.2rem; }
+    .result-row + .result-row { border-top: 1px solid var(--line); }
+    .result-label { font-weight: 730; }
+    .result-bar { height: 9px; background: var(--paper-2); border-radius: var(--r-pill); overflow: hidden; }
+    .result-bar span { display: block; height: 100%; width: var(--w); background: var(--accent); border-radius: inherit; }
+    .result-value { text-align: right; color: var(--accent-strong); font-family: "SFMono-Regular",Consolas,monospace; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .metric-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.7rem 0; }
+    .metric-block { padding: 1.4rem; color: var(--paper); background: var(--ink); border-radius: var(--r-lg); }
+    .metric-block strong { display: block; color: var(--accent-soft); font-size: clamp(2rem,4vw,3.4rem); line-height: 1; font-variant-numeric: tabular-nums; }
+    .metric-block p { margin: .7rem 0 0; color: color-mix(in oklch,var(--paper) 75%,transparent); font-size: .88rem; }
+    details.note { margin: .85rem 0; background: var(--paper); border-radius: var(--r-md); box-shadow: var(--shadow-1); overflow: clip; }
+    details.note summary { min-height: 56px; padding: .9rem 1rem; cursor: pointer; font-weight: 730; }
+    details.note summary span { display: block; margin-top: .18rem; color: var(--muted); font-size: .8rem; font-weight: 500; }
+    .note-body { padding: 0 1rem 1rem; color: var(--ink-soft); }
+    pre { margin: .8rem 0 0; padding: 1rem; overflow-x: auto; color: var(--paper); background: var(--ink); border-radius: var(--r-sm); font-size: .8rem; line-height: 1.65; }
+    .limits { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px; margin: 2rem 0; overflow: clip; background: var(--line); border-radius: var(--r-lg); }
+    .limit { padding: 1.2rem; background: var(--paper); }
+    .limit b { display: block; margin-bottom: .35rem; }
+    .limit p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .closing { margin-top: 5rem; padding: 2.2rem; color: var(--paper); background: var(--accent-strong); border-radius: var(--r-lg); }
+    .closing p { max-width: 760px; margin: 0; font-family: "Iowan Old Style","Songti SC",serif; font-size: clamp(1.4rem,3vw,2.25rem); line-height: 1.35; }
+    footer { margin-top: 5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
+    footer p { margin: .45rem 0; }
+    .production-meta {
+      --production-surface: var(--paper-2,var(--panel-2,var(--paper-deep,#f4ead7)));
+      --production-ink: var(--ink,#25211c);
+      --production-muted: var(--muted,#6f675d);
+      --production-line: var(--line,#dacdb8);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1rem 0 0;
+    }
+    .production-label { margin-right: .1rem; color: var(--production-muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+    .production-chip { display: inline-flex; align-items: baseline; gap: .38rem; padding: .22rem .58rem; background: var(--production-surface); border-radius: 999px; line-height: 1.35; }
+    .production-key { color: var(--production-muted); font-size: .68rem; letter-spacing: .04em; }
+    .production-value { color: var(--production-ink); font-family: "JetBrains Mono","SFMono-Regular",Consolas,ui-monospace,monospace; font-size: .72rem; font-weight: 650; }
+    .production-divider { width: 1px; height: 1.1rem; margin: 0 .1rem; background: var(--production-line); }
+    @media (hover:hover) {
+      .fig-toggle:hover { background: color-mix(in oklch,var(--accent-soft) 70%,transparent); }
+      .nav .source-link:hover { color: var(--paper); background: var(--accent-strong); }
+    }
+    @media (max-width:980px) {
+      .shell { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .hero-ledger { grid-template-columns: repeat(2,1fr); }
+      .ledger-cell:nth-child(3) { border-left: 0; border-top: 1px solid rgba(255,255,255,.14); }
+      .ledger-cell:nth-child(4) { border-top: 1px solid rgba(255,255,255,.14); }
+      .mechanism-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width:720px) {
+      .topbar-inner { width: min(100% - 1.2rem,var(--max)); }
+      .nav a:not(.source-link) { display: none; }
+      .shell { width: min(100% - 1.2rem,var(--max)); padding: 3rem 0 4.5rem; }
+      h1 { font-size: clamp(2.7rem,14vw,4.6rem); }
+      section { margin: 4.3rem 0; }
+      .hero-ledger, .problem-chain, .phase-compare, .insight-strip, .metric-pair, .limits { grid-template-columns: 1fr; }
+      .ledger-cell + .ledger-cell { border-left: 0; border-top: 1px solid rgba(255,255,255,.14); }
+      .tldr-row { grid-template-columns: 1fr; gap: .35rem; }
+      .architecture-note { grid-template-columns: 1fr; }
+      .layer-row { grid-template-columns: 1fr; }
+      .layer-row > div + div { padding-top: 0; }
+      .result-row { grid-template-columns: 1fr auto; gap: .6rem; }
+      .result-bar { grid-column: 1 / -1; grid-row: 2; }
+      .figure-caption { align-items: flex-start; flex-direction: column; }
+      .fig-toggle { margin-left: -.7rem; }
+      .closing { padding: 1.5rem; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到正文</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">VGalaxies · Visual Reading</a>
+      <nav class="nav" aria-label="页面导航">
+        <a href="#architecture">架构</a>
+        <a href="#optimizations">优化</a>
+        <a href="#results">结果</a>
+        <a class="source-link" href="https://www.lmsys.org/blog/2025-05-05-large-scale-ep/" target="_blank" rel="noopener noreferrer">原文 ↗</a>
+      </nav>
+    </div>
+  </header>
+  <div class="shell" id="top">
+    <main id="main-content">
+      <header class="hero">
+        <div class="eyebrow">SGLang System Note · 2025.05.05</div>
+        <h1>96 张 H100<br>不是答案</h1>
+        <p class="hero-subtitle">真正的答案，是把 DeepSeek-V3 推理拆成一组彼此匹配的系统选择：<strong>Prefill 与 Decode 分开，稠密层与稀疏层分开，计算与通信重叠，热点专家动态重排</strong>。</p>
+        <div class="meta">
+          <span>The SGLang Team</span><span>LMSYS Blog</span><span>12 节点 × 8 H100</span><span>DeepSeek-V3</span>
+        </div>
+        <div class="hero-ledger" aria-label="核心结果">
+          <div class="ledger-cell"><strong>52.3k</strong><span>每节点每秒输入 token<br>2K prompt 场景</span></div>
+          <div class="ledger-cell"><strong>22.3k</strong><span>每节点每秒输出 token<br>Decode EP72</span></div>
+          <div class="ledger-cell"><strong>5.2×</strong><span>Decode 相对 TP16<br>同类资源比较</span></div>
+          <div class="ledger-cell"><strong>$0.20</strong><span>每百万输出 token<br>作者给出的本地部署估算</span></div>
+        </div>
+      </header>
+
+      <section id="tldr">
+        <div class="section-kicker">30 秒读懂</div>
+        <h2>这是一套“先解耦，再对症优化”的系统</h2>
+        <div class="tldr">
+          <div class="tldr-row"><b>先拆阶段</b><p>Prefill 吃算力、处理长输入；Decode 吃显存带宽、反复读 KV cache。统一调度会让两种工作彼此打断，也无法同时使用 DeepEP 的两套 dispatch 模式。</p></div>
+          <div class="tldr-row"><b>再拆层</b><p>Attention、Dense FFN、Sparse FFN、LM Head 的权重形态和通信模式不同。SGLang 用 DP 避免 KV 复制和小矩阵碎片，用 EP 分散海量专家权重。</p></div>
+          <div class="tldr-row"><b>最后补代价</b><p>EP 会带来 all-to-all 通信和专家负载不均。TBO 用两个 micro-batch 把计算盖在通信上，EPLB 复制热点专家并周期重排。</p></div>
+        </div>
+      </section>
+
+      <section id="problem">
+        <div class="section-kicker">01 · 问题起点</div>
+        <h2>为什么“一个引擎统一调度”反而成了障碍</h2>
+        <p class="section-deck">Prefill 与 Decode 看起来只是同一次请求的前后半段，放在一个引擎里却会产生三种结构性冲突。</p>
+        <div class="problem-chain">
+          <div class="problem"><span class="problem-num">01</span><h3>Prefill 打断 Decode</h3><p>长 prompt 批次进入时，会延后正在逐 token 生成的请求，直接拉高 ITL。</p></div>
+          <div class="problem"><span class="problem-num">02</span><h3>DP Attention 失衡</h3><p>不同 DP worker 同时承担计算强度完全不同的阶段，Decode 会被最慢一侧拖住。</p></div>
+          <div class="problem"><span class="problem-num">03</span><h3>DeepEP 模式冲突</h3><p>Prefill 适合 normal dispatch，Decode 需要 low-latency dispatch；同一通信组无法同时满足两者。</p></div>
+        </div>
+        <div class="reading-column"><p class="lead">所以 PD Disaggregation 的意义不只是“分两台服务器”。它建立了一条系统边界，让两侧可以分别选择 batch、通信 kernel、GEMM layout、CUDA Graph 和专家布局。</p></div>
+      </section>
+
+      <section id="architecture">
+        <div class="section-kicker">02 · 总体架构</div>
+        <h2>3 个节点吃下输入，9 个节点持续生成</h2>
+        <p class="section-deck">12 个节点并不做同一件事。Prefill 集群追求吞吐和动态形状，Decode 集群追求低延迟、固定形状和更大的可运行 batch。</p>
+        <figure class="source-figure">
+          <img src="imgs/overall-arch.png" width="2400" height="1800" alt="SGLang 在 3 个 Prefill 节点和 9 个 Decode 节点上部署 DeepSeek-V3 的总体架构">
+          <figcaption class="figure-caption"><p>原图：3 个 Prefill 节点通过 KV Cache Transfer，把请求交给 9 个 Decode 节点。</p><button class="fig-toggle" type="button" aria-expanded="false">展开说明 ▸</button></figcaption>
+          <div class="figure-detail"><div><ul>
+            <li><strong>Prefill Workers：</strong>3 个节点，每个节点先做 DP Attention，再用 DeepEP normal dispatch 把 token 送往专家子组。</li>
+            <li><strong>KV Cache Transfer：</strong>Prefill 只负责算出 prompt 对应的 KV cache，随后通过 RDMA 路径送到 Decode 侧。</li>
+            <li><strong>Decode Workers：</strong>9 个节点使用 low-latency dispatch，重点是降低每一步生成的固定开销。</li>
+            <li><strong>虚线连接：</strong>表示数据并行与 KV 分发关系，不是把所有中间状态都复制到每个 GPU。</li>
+            <li><strong>一句话总结：</strong>资源比例反映两阶段吞吐需求，分离后每一侧都能独立扩缩。</li>
+          </ul></div></div>
+        </figure>
+        <div class="architecture-note"><div><b>3 nodes</b><span>Prefill · EP32 · normal dispatch</span></div><div><b>9 nodes</b><span>Decode · EP72 · low-latency dispatch · 更大 batch</span></div></div>
+      </section>
+
+      <section id="parallelism">
+        <div class="section-kicker">03 · 按层选并行策略</div>
+        <h2>不是所有层都值得做 Tensor Parallel</h2>
+        <p class="section-deck">DeepSeek-V3 的层类型差异很大。简单把 TP degree 拉高，会把矩阵切得太碎、引入 all-reduce，还可能在 DP Attention 下增加隐藏状态内存。</p>
+        <div class="layer-map" aria-label="逐层并行策略">
+          <div class="layer-row"><div class="layer-name">MLA Attention</div><div class="layer-choice">DP</div><div class="layer-reason">避免跨设备复制 KV cache；小 batch 时可与有限 TP 混合。</div></div>
+          <div class="layer-row"><div class="layer-name">Dense FFN</div><div class="layer-choice">DP</div><div class="layer-reason">18,432 中间维在 TP32 下被切成 576，既不对齐 128，也让两次 all-reduce 成为额外成本。</div></div>
+          <div class="layer-row"><div class="layer-name">Sparse FFN</div><div class="layer-choice">EP</div><div class="layer-reason">专家权重是主要内存瓶颈，按专家分布到 GPU；代价是 irregular all-to-all 与负载倾斜。</div></div>
+          <div class="layer-row"><div class="layer-name">LM Head</div><div class="layer-choice">DP</div><div class="layer-reason">沿用 Dense FFN 的思路，避免 vocabulary parallel 的聚合路径继续扩大。</div></div>
+        </div>
+        <figure class="source-figure">
+          <img src="imgs/parallel-design.png" width="2400" height="1044" loading="lazy" alt="DP Dense FFN 和 EP Sparse FFN 与 DP Attention 的并行方式对比">
+          <figcaption class="figure-caption"><p>原图：稠密 FFN 留在每个 DP rank 内，稀疏 FFN 则通过 DeepEP dispatch/combine 跨设备访问专家。</p><button class="fig-toggle" type="button" aria-expanded="false">展开说明 ▸</button></figcaption>
+          <div class="figure-detail"><div><ul>
+            <li><strong>左侧 Dense FFN：</strong>每个 batch 在自己的 DP 路径上完成 Attention 和 Dense FFN，不需要为每层做两次 all-reduce。</li>
+            <li><strong>右侧 Sparse FFN：</strong>Attention 之后，DeepEP Dispatch 根据路由结果把 token 发送到拥有目标专家的设备。</li>
+            <li><strong>EP Sparse FFN：</strong>不同 GPU 只持有专家权重子集，由此把模型权重显存摊薄。</li>
+            <li><strong>DeepEP Combine：</strong>专家计算完成后，把结果送回 token 原来的 DP 路径。</li>
+            <li><strong>关键取舍：</strong>EP 换来了更大 batch 和更低权重显存，但通信与最慢专家会成为新瓶颈。</li>
+          </ul></div></div>
+        </figure>
+      </section>
+
+      <section id="pd">
+        <div class="section-kicker">04 · PD 分离</div>
+        <h2>把两个阶段分开，才能让两套 kernel 都成立</h2>
+        <div class="phase-compare">
+          <article class="phase"><div class="phase-label"><b>Prefill</b><span>throughput first</span></div><ul><li>长输入、动态 token 数</li><li>DeepEP normal dispatch</li><li>DeepGEMM contiguous layout</li><li>通常不依赖 CUDA Graph</li></ul></article>
+          <article class="phase"><div class="phase-label"><b>Decode</b><span>latency first</span></div><ul><li>每步 token 少、重复次数多</li><li>DeepEP low-latency dispatch</li><li>DeepGEMM masked layout</li><li>固定形状，兼容 CUDA Graph</li></ul></article>
+        </div>
+        <div class="compat-wrap">
+          <table>
+            <thead><tr><th>DeepEP 模式</th><th>长输入</th><th>长输出</th><th>DP Attention</th><th>CUDA Graph</th></tr></thead>
+            <tbody>
+              <tr><td>Normal</td><td class="yes">适合</td><td class="no">不适合</td><td class="yes">支持</td><td class="no">不支持</td></tr>
+              <tr><td>Low-Latency</td><td class="no">不适合</td><td class="yes">适合</td><td class="yes">支持</td><td class="yes">支持</td></tr>
+              <tr><td>Auto（统一引擎）</td><td class="yes">支持</td><td class="yes">支持</td><td class="no">冲突</td><td class="yes">支持</td></tr>
+              <tr><td>PD 分离后</td><td class="yes">Normal</td><td class="yes">Low-Latency</td><td class="yes">两侧都支持</td><td class="yes">Decode 支持</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <figure class="source-figure">
+          <img src="imgs/pd-disaggregation.png" width="1434" height="1120" loading="lazy" alt="Prefill Server 和 Decode Server 之间的握手、KV 预分配和传输时序">
+          <figcaption class="figure-caption"><p>原图：Decode 先预留 KV cache，Prefill 再计算并通过后台 RDMA 路径传输。</p><button class="fig-toggle" type="button" aria-expanded="false">展开说明 ▸</button></figcaption>
+          <div class="figure-detail"><div><ul>
+            <li><strong>Handshake：</strong>Prefill 创建 sender，Decode 创建 receiver，两侧建立成对连接。</li>
+            <li><strong>Pre-allocation：</strong>Decode 先分配 KV cache 地址，避免数据到达后再阻塞式申请。</li>
+            <li><strong>Notify：</strong>Decode 准备好后通知 Prefill 开始 forward。</li>
+            <li><strong>KV Transfer：</strong>Prefill 计算完成后发送非连续 KV 块；后台线程保持 scheduler event loop 不被阻塞。</li>
+            <li><strong>Decode forward：</strong>接收完成后进入逐 token 生成，此后不再被新的长 prompt 批次打断。</li>
+          </ul></div></div>
+        </figure>
+      </section>
+
+      <section id="optimizations">
+        <div class="section-kicker">05 · 大规模 EP 的三块补丁</div>
+        <h2>分散权重只是开始，通信和倾斜才是难点</h2>
+        <div class="mechanism-grid">
+          <article class="mechanism"><span class="tag">DeepEP + DeepGEMM</span><h3>让通信形态与矩阵 layout 对上</h3><p>Prefill 的 symbolic shape 先经 Triton permutation 转成 contiguous layout；Decode 直接使用固定形状 masked layout。</p></article>
+          <article class="mechanism"><span class="tag">TBO</span><h3>把一个 batch 拆成两个微批次</h3><p>一个 micro-batch 等通信时，另一个提交 Attention 或 MLP，既隐藏 all-to-all，也把峰值 activation 近似减半。</p></article>
+          <article class="mechanism"><span class="tag">EPLB</span><h3>复制热点专家，重排长尾专家</h3><p>256 个原始专家加 32 个冗余副本，形成 288 专家池，让热点复制和 EP12、EP72 等布局都成为可能。</p></article>
+        </div>
+        <h3>TBO 的关键不是“拆成两半”，而是提交顺序</h3>
+        <p class="reading-column">DeepEP normal dispatch 即使以异步模式调用，也可能阻塞 CPU 等待跨 rank 元数据。如果先触发 dispatch，再提交计算，GPU 计算流会出现空泡。正确顺序是先把可执行计算推入 GPU queue，再进入 CPU-blocking 通信。</p>
+        <figure class="source-figure">
+          <img src="imgs/tbo-prefill.png" width="1080" height="640" loading="lazy" alt="Two-batch overlap 在错误和正确启动顺序下的时间线对比">
+          <figcaption class="figure-caption"><p>原图：上方错误顺序留下 Wasted 空泡，下方先提交 MLP 后让计算与 Dispatch 重叠。</p><button class="fig-toggle" type="button" aria-expanded="false">展开说明 ▸</button></figcaption>
+          <div class="figure-detail"><div><ul>
+            <li><strong>三条时间线：</strong>CPU 负责发起任务，Computation Stream 跑 Attention/MLP，Communication Stream 跑 Dispatch。</li>
+            <li><strong>错误顺序：</strong>CPU 被第二次 Dispatch 卡住时，后续 MLP 还没提交，计算流只能空等。</li>
+            <li><strong>正确顺序：</strong>CPU 先提交 MLP，再进入阻塞区，GPU 因此能在通信期间继续计算。</li>
+            <li><strong>YieldOperation 抽象：</strong>代码仍按单 micro-batch 编写，在 Attention、Dispatch、MLP、Combine 之间设置让出点，减少重复逻辑。</li>
+            <li><strong>收益边界：</strong>batch 太小时，拆分会让 kernel 更低效，TBO 可能出现负收益。</li>
+          </ul></div></div>
+        </figure>
+        <h3>EPLB 在规模上升时越来越重要</h3>
+        <p class="reading-column">MoE 的全局速度由最慢 GPU 决定。GPU 越多，某张卡偶然接到大量热点专家 token 的概率越高。EPLB 用工作负载统计决定专家复制和共置，提升平均计算量与最大计算量之比。</p>
+        <figure class="source-figure">
+          <img src="imgs/eplb-balancedness.png" width="2400" height="1796" loading="lazy" alt="不同 GPU 数量下启用与不启用 EPLB 的专家负载平衡度曲线">
+          <figcaption class="figure-caption"><p>原图：不用 EPLB 时，规模从 8 增长到 64 GPU，balancedness 持续恶化；启用后维持在约 0.8 以上。</p><button class="fig-toggle" type="button" aria-expanded="false">展开说明 ▸</button></figcaption>
+          <div class="figure-detail"><div><ul>
+            <li><strong>横轴：</strong>GPU 数量，也可理解为 EP size 持续扩大。</li>
+            <li><strong>纵轴：</strong>平均计算时间除以最大计算时间，越接近 1，GPU 越同步。</li>
+            <li><strong>无 EPLB：</strong>balancedness 从约 0.67 下滑到约 0.47，慢 rank 的拖累随规模加重。</li>
+            <li><strong>有 EPLB：</strong>曲线保持在约 0.8–0.95，说明复制热点专家能显著缩小长尾。</li>
+            <li><strong>现实限制：</strong>统计分布必须接近线上请求；分布漂移时需要周期重平衡和低成本权重 reload。</li>
+          </ul></div></div>
+        </figure>
+        <div class="insight-strip">
+          <div class="insight"><b>扩大 batch</b><p>更大的 batch 会平滑随机路由波动。EP 节省的权重显存，反过来让更大 batch 成为可能。</p></div>
+          <div class="insight"><b>周期重平衡</b><p>主存或 mmap 预备权重，DMA 后台拷入 device memory，最后用 device-to-device copy 完成切换。</p></div>
+        </div>
+      </section>
+
+      <section id="results">
+        <div class="section-kicker">06 · 结果怎么读</div>
+        <h2>性能接近官方 profile，但条件和目标要看清</h2>
+        <p class="section-deck">作者分别把非测试阶段视为“资源无限”，测出 Prefill 与 Decode 的最大承载能力。这更接近容量规划，不等于一个普通在线请求会同时得到这些数字。</p>
+        <div class="result-ledger">
+          <div class="result-row"><div class="result-label">Prefill · 1K</div><div class="result-bar"><span style="--w:91.9%"></span></div><div class="result-value">57,674</div></div>
+          <div class="result-row"><div class="result-label">Prefill · 2K</div><div class="result-bar"><span style="--w:87%"></span></div><div class="result-value">54,543</div></div>
+          <div class="result-row"><div class="result-label">Prefill · 4K</div><div class="result-bar"><span style="--w:80.2%"></span></div><div class="result-value">50,302</div></div>
+          <div class="result-row"><div class="result-label">Decode · 2K</div><div class="result-bar"><span style="--w:89.1%"></span></div><div class="result-value">22,282</div></div>
+          <div class="result-row"><div class="result-label">Decode · 4K MTP</div><div class="result-bar"><span style="--w:69.5%"></span></div><div class="result-value">17,373</div></div>
+        </div>
+        <p class="mono" style="color:var(--muted);font-size:.78rem;">单位：tokens / second / node。条长按各阶段图表上界归一化，仅用于感受量级。</p>
+        <div class="metric-pair">
+          <div class="metric-block"><strong>3.3×</strong><p>Prefill 相对 TP16 的最高提升。理想专家平衡下，距 DeepSeek profile 约 5.6%。</p></div>
+          <div class="metric-block"><strong>5.2×</strong><p>Decode 在 EP72、2K input 下相对 TP16 的提升。大 batch 是主要贡献之一。</p></div>
+        </div>
+        <figure class="source-figure">
+          <img src="imgs/e2e-prefill-decode.png" width="2400" height="1240" loading="lazy" alt="SGLang Prefill 和 Decode 吞吐与 TP16、DeepSeek profile 的比较">
+          <figcaption class="figure-caption"><p>原图：EP32/EP72 大幅超过 TP16；理想 EPLB 或模拟 MTP 后，结果接近 DeepSeek profile。</p><button class="fig-toggle" type="button" aria-expanded="false">展开说明 ▸</button></figcaption>
+          <div class="figure-detail"><div><ul>
+            <li><strong>左侧 Prefill：</strong>EP32 在 1K、2K、4K 输入下都远高于 TP16；4K 时默认专家分布仍受失衡影响。</li>
+            <li><strong>Fake Perfect EPLB：</strong>用理想路由估计性能上界，4K Prefill 从 50,302 提升到 59,337 tok/s/node。</li>
+            <li><strong>右侧 Decode：</strong>EP72 在多个输入输出组合下约 21K–22K tok/s/node，TP16 约 3K–4K。</li>
+            <li><strong>可运行 batch：</strong>EP72 的权重显存更低，因此可运行 batch 显著大于 TP16，这正是吞吐差距的重要来源。</li>
+            <li><strong>模拟 MTP：</strong>作者用更大 batch、缩短 KV 长度和 dummy attention kernel 模拟 MTP，并假设 70% 接受率，不是完整生产 MTP 测试。</li>
+          </ul></div></div>
+        </figure>
+        <h3>两项消融给出的边界</h3>
+        <div class="insight-strip">
+          <div class="insight"><b>TBO 不是总会更快</b><p>Prefill 同 token 数提升 27%–35%。Decode 在 32 tokens/device 时反而 -27%，到 256 tokens/device 才达到 +25.5%；模拟 MTP 场景为 +35%。</p></div>
+          <div class="insight"><b>EPLB 的收益很大，也很依赖分布</b><p>实验中 Prefill 提升 1.49×、Decode 提升 2.54×，但使用了与测试输入匹配的专家分布，线上分布漂移仍未验证。</p></div>
+        </div>
+      </section>
+
+      <section id="toolkits">
+        <div class="section-kicker">07 · 工程工具</div>
+        <h2>两件不显眼、但很实用的配套工作</h2>
+        <details class="note">
+          <summary>DisposableTensor：绕开 Python 引用计数，立即释放 CUDA 内存<span>普通 del 不能消除函数外部仍持有的引用，dispose() 用于主动归还显存。</span></summary>
+          <div class="note-body"><p>在复杂 forward 中，activation 的最后一次使用点常常早于 Python 对象生命周期。SGLang 用 Tensor 子类显式释放底层 storage，压低峰值显存。</p><pre><code>hidden_state = DisposableTensor(hidden_state)&#10;intermediate = linear1(hidden_state)&#10;hidden_state.dispose()   # 最后一次使用后立即释放 CUDA memory&#10;output = linear2(relu(intermediate))</code></pre></div>
+        </details>
+        <details class="note">
+          <summary>Expert workload extraction：先在小集群采样，再模拟大集群<span>可以评估节点数、batch size、重平衡频率，不必每个方案都占用 96 张 H100。</span></summary>
+          <div class="note-body"><p>工具既能输出累计专家统计，供 EPLB manager 在线更新，也能保存逐 batch 数据。团队可以在 2×8 H100 或 8×H200 上采样，然后模拟 22 节点部署的专家利用率。</p></div>
+        </details>
+      </section>
+
+      <section id="limits">
+        <div class="section-kicker">08 · 边界</div>
+        <h2>它优化的是吞吐，不是所有服务目标</h2>
+        <div class="limits">
+          <div class="limit"><b>TTFT 仍为 2–5 秒</b><p>更适合批量吞吐，不代表实时交互延迟已经解决。</p></div>
+          <div class="limit"><b>ITL 约 100ms</b><p>逐 token 体验仍有继续优化的空间。</p></div>
+          <div class="limit"><b>序列长度受 96 GPU 限制</b><p>更长上下文需要更多资源或不同 KV 管理方案。</p></div>
+          <div class="limit"><b>MTP 仍是模拟与不完整集成</b><p>尚未与 DP Attention 完整咬合，70% 接受率也是假设。</p></div>
+          <div class="limit"><b>EPLB 面临分布漂移</b><p>实验使用 in-distribution 数据，真实线上变化可能要求频繁重排。</p></div>
+          <div class="limit"><b>只支持 Hopper</b><p>当时尚未覆盖 Blackwell；Dense FFN 也缺少介于纯 DP 与纯 TP 之间的灵活 TP size。</p></div>
+        </div>
+        <div class="closing"><p>这篇博客最值得带走的，不是某个吞吐数字，而是一种系统设计方法：<strong>先承认不同阶段、不同层的物理瓶颈不同，再为每个瓶颈选择局部最合适的并行、通信与调度策略。</strong></p></div>
+      </section>
+
+      <footer>
+        <p>原文：<a href="https://www.lmsys.org/blog/2025-05-05-large-scale-ep/" target="_blank" rel="noopener noreferrer">Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs</a> · The SGLang Team · LMSYS</p>
+        <p>延伸：<a href="https://github.com/deepseek-ai/DeepEP" target="_blank" rel="noopener noreferrer">DeepEP</a> · <a href="https://github.com/deepseek-ai/DeepGEMM" target="_blank" rel="noopener noreferrer">DeepGEMM</a> · <a href="https://github.com/deepseek-ai/EPLB" target="_blank" rel="noopener noreferrer">EPLB</a> · <a href="https://github.com/sgl-project/sglang/issues/6017" target="_blank" rel="noopener noreferrer">复现实验入口</a></p>
+        <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh"><span class="production-label">制作信息</span><span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span><span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span></p>
+      </footer>
+    </main>
+    <aside class="toc" aria-label="目录">
+      <div class="toc-title">Reading path</div>
+      <a href="#tldr">30 秒读懂</a><a href="#problem">统一调度为何失效</a><a href="#architecture">3+9 节点架构</a><a href="#parallelism">按层选并行</a><a href="#pd">PD 分离</a><a href="#optimizations">EP 的三块补丁</a><a href="#results">性能结果</a><a href="#toolkits">工程工具</a><a href="#limits">边界</a>
+    </aside>
+  </div>
+  <script>
+    document.querySelectorAll('.fig-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const figure = button.closest('.source-figure');
+        const isOpen = figure.classList.toggle('open');
+        button.setAttribute('aria-expanded', String(isOpen));
+        button.textContent = isOpen ? '收起说明 ▴' : '展开说明 ▸';
+      });
+    });
+    const tocLinks = [...document.querySelectorAll('.toc a')];
+    const sections = tocLinks.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      tocLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === '#' + visible.target.id));
+    }, { rootMargin: '-20% 0px -65% 0px', threshold: [0,.15,.5] });
+    sections.forEach((section) => observer.observe(section));
+  </script>
+</body>
+</html>

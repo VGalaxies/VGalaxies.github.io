@@ -7,6 +7,11 @@
 #   source_type  - paper 或 blog
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: deepseek-large-scale-ep
+    title: 'SGLang 怎么在 96 张 H100 上拆开 DeepSeek 推理瓶颈'
+    date: 2026-07-12
+    source_type: blog
+    source_url: 'https://www.lmsys.org/blog/2025-05-05-large-scale-ep/'
   - slug: agent-as-a-router
     title: 'Agent-as-a-Router 怎么从执行反馈中学会选模型'
     date: 2026-07-12
