@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Geoffrey Litt《Understanding is the new bottleneck》中文可视化阅读笔记：当 Agent 写代码越来越快，人类为什么仍需理解，以及解释、测验、微型世界和共享空间如何帮助我们继续参与创造。">
+  <meta name="visual-reading-tags" content="Agent Systems, Software Engineering, Developer Tools, Human-AI Collaboration, Cognitive Debt">
+  <title>代码越写越快，理解为什么成了新瓶颈？</title>
+  <style>
+    :root {
+      --canvas: oklch(96.8% 0.014 80);
+      --paper: oklch(99% 0.006 82);
+      --paper-2: oklch(93.8% 0.025 78);
+      --paper-deep: oklch(88.8% 0.041 73);
+      --panel-2: oklch(91.8% 0.034 74);
+      --ink: oklch(21.5% 0.021 54);
+      --ink-soft: oklch(36.5% 0.025 55);
+      --muted: oklch(50.5% 0.021 58);
+      --line: oklch(81.5% 0.035 72);
+      --signal: oklch(62% 0.166 48);
+      --signal-dark: oklch(43% 0.126 43);
+      --signal-soft: oklch(91.5% 0.065 63);
+      --cool: oklch(52% 0.085 238);
+      --cool-soft: oklch(92.5% 0.031 234);
+      --good: oklch(49% 0.105 153);
+      --shadow: 0 1px 2px rgba(57, 39, 22, .10), 0 16px 42px rgba(57, 39, 22, .07);
+      --r-xs: 4px;
+      --r-sm: 8px;
+      --r-md: 14px;
+      --r-lg: 24px;
+      --r-pill: 999px;
+      --max: 1180px;
+      --read: 760px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-size: 16px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: .13;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitchTiles'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.09'/%3E%3C/svg%3E");
+    }
+
+    a { color: var(--signal-dark); text-decoration-thickness: 1px; text-underline-offset: .2em; }
+    a:hover { color: var(--signal); }
+    p { margin: 0 0 1rem; text-wrap: pretty; }
+    ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; }
+    li + li { margin-top: .5rem; }
+    strong { font-weight: 760; }
+    img, video { display: block; max-width: 100%; }
+    button, summary, a { touch-action: manipulation; }
+    button, summary { font: inherit; }
+    button:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--signal) 36%, transparent);
+      outline-offset: 3px;
+    }
+    code, .mono, .eyebrow, .section-no, .toc-label, .tag, .meter-label, .tool-index {
+      font-family: "SFMono-Regular", "Cascadia Mono", Consolas, ui-monospace, monospace;
+    }
+    code {
+      padding: .08em .32em;
+      background: var(--paper-2);
+      border-radius: var(--r-xs);
+      font-size: .9em;
+    }
+    h1, h2, h3, blockquote, .display {
+      font-family: "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
+      text-wrap: balance;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: .5rem;
+      left: .5rem;
+      z-index: 99;
+      padding: .65rem .9rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      transform: translateY(-160%);
+      transition: transform 160ms cubic-bezier(.16, 1, .3, 1);
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: color-mix(in oklch, var(--canvas) 96%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 74%, transparent);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Songti SC", "STSong", serif;
+      font-weight: 760;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .top-links { display: flex; align-items: center; gap: .45rem; }
+    .top-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .8rem;
+      color: var(--muted);
+      border-radius: var(--r-pill);
+      font-size: .8rem;
+      text-decoration: none;
+    }
+    .top-link.source { color: var(--paper); background: var(--ink); }
+    @media (hover: hover) {
+      .top-link:hover { background: var(--paper-2); }
+      .top-link.source:hover { color: var(--paper); background: var(--signal-dark); }
+    }
+    .top-link:active, button:active { transform: scale(.96); }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 210px;
+      gap: 4rem;
+      padding: 4.7rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.3rem;
+      align-self: start;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .toc-label {
+      margin: 0 0 .65rem;
+      color: var(--ink-soft);
+      font-size: .67rem;
+      font-weight: 760;
+      letter-spacing: .12em;
+    }
+    .toc a {
+      display: block;
+      min-height: 39px;
+      padding: .52rem .7rem;
+      color: var(--muted);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 65%, transparent);
+      text-decoration: none;
+      line-height: 1.4;
+    }
+    .toc a.active { color: var(--signal-dark); font-weight: 760; }
+
+    .hero {
+      position: relative;
+      padding: .4rem 0 4.8rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(330px, .88fr);
+      align-items: center;
+      gap: 3.1rem;
+    }
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem 1rem;
+      margin-bottom: 1.25rem;
+      color: var(--signal-dark);
+      font-size: .71rem;
+      font-weight: 760;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 790px;
+      margin: 0 0 1.5rem;
+      font-size: clamp(3rem, 4.6vw, 4.6rem);
+      font-weight: 800;
+      letter-spacing: -.018em;
+      line-height: 1.01;
+    }
+    h1 span { display: block; }
+    .hero-deck {
+      max-width: 680px;
+      margin: 0 0 1.8rem;
+      color: var(--ink-soft);
+      font-size: clamp(1.05rem, 1.8vw, 1.24rem);
+      line-height: 1.72;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem 1.1rem;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+
+    .bottleneck-board {
+      position: relative;
+      padding: 1.3rem 1.25rem 1.45rem;
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+      transform: rotate(1.2deg);
+    }
+    .bottleneck-board::before {
+      content: "UNDERSTANDING LAB / 07.2026";
+      display: block;
+      margin-bottom: 1.5rem;
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .62rem;
+      letter-spacing: .11em;
+    }
+    .meter + .meter { margin-top: 1.2rem; }
+    .meter-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: .45rem;
+    }
+    .meter-label { color: var(--ink-soft); font-size: .7rem; font-weight: 760; letter-spacing: .04em; }
+    .meter-value { font-size: 1.65rem; font-weight: 820; font-variant-numeric: tabular-nums; line-height: 1; }
+    .meter-track {
+      position: relative;
+      height: 20px;
+      overflow: hidden;
+      background: var(--paper-2);
+      border-radius: var(--r-pill);
+      box-shadow: inset 0 1px 2px rgba(50, 35, 23, .12);
+    }
+    .meter-fill { height: 100%; border-radius: inherit; }
+    .meter-fill.output { width: 92%; background: var(--ink); }
+    .meter-fill.understanding { width: 42%; background: var(--signal); }
+    .meter-mark {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      left: 57%;
+      width: 2px;
+      background: var(--signal-dark);
+    }
+    .board-note {
+      margin: 1.35rem 0 0;
+      padding-top: 1rem;
+      border-top: 1px dashed var(--line);
+      color: var(--ink-soft);
+      font-family: "Songti SC", "STSong", serif;
+      font-size: 1.06rem;
+      line-height: 1.55;
+    }
+    .board-note strong { color: var(--signal-dark); }
+
+    .tldr {
+      margin: 3rem 0 0;
+      padding: 1.4rem 1.5rem 1.5rem;
+      background: var(--paper);
+      border-radius: var(--r-md);
+      box-shadow: 0 1px 2px rgba(57, 39, 22, .09), 0 8px 26px rgba(57, 39, 22, .05);
+    }
+    .tldr-label {
+      margin-bottom: .65rem;
+      color: var(--signal-dark);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .68rem;
+      font-weight: 780;
+      letter-spacing: .1em;
+    }
+    .tldr p { margin: 0; font-size: 1.04rem; }
+
+    section {
+      padding: 5.3rem 0;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 4.5rem;
+    }
+    .section-no {
+      display: inline-block;
+      margin-bottom: .7rem;
+      color: var(--signal-dark);
+      font-size: .67rem;
+      font-weight: 780;
+      letter-spacing: .12em;
+    }
+    h2 {
+      max-width: 800px;
+      margin: 0 0 1.1rem;
+      font-size: clamp(2rem, 4.5vw, 3.75rem);
+      font-weight: 780;
+      letter-spacing: -.012em;
+      line-height: 1.12;
+    }
+    h3 { margin: 0 0 .65rem; font-size: 1.3rem; line-height: 1.35; }
+    .lead { max-width: var(--read); color: var(--ink-soft); font-size: 1.08rem; }
+    .reading-copy { max-width: var(--read); }
+
+    .pivot {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1.35rem;
+      align-items: stretch;
+      margin: 2.3rem 0 1.5rem;
+    }
+    .pivot-side {
+      padding: 1.35rem 1.4rem 1.45rem;
+      background: color-mix(in oklch, var(--paper) 70%, transparent);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .pivot-side.participate { background: var(--signal-soft); }
+    .pivot-side span {
+      display: block;
+      margin-bottom: .45rem;
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .65rem;
+      font-weight: 760;
+      letter-spacing: .08em;
+    }
+    .pivot-side strong { display: block; margin-bottom: .45rem; font-family: "Songti SC", "STSong", serif; font-size: 1.5rem; }
+    .pivot-side p { margin: 0; color: var(--ink-soft); }
+    .pivot-arrow { align-self: center; color: var(--signal-dark); font-size: 2.1rem; }
+    .boundary-note {
+      max-width: var(--read);
+      margin: 1.7rem 0 0;
+      padding: 1rem 1.1rem;
+      color: var(--ink-soft);
+      background: var(--paper-2);
+      border-radius: var(--r-sm);
+      font-size: .92rem;
+    }
+
+    figure { margin: 2.4rem 0 0; }
+    figure img, figure video {
+      width: 100%;
+      background: var(--paper);
+      border-radius: var(--r-md);
+      box-shadow: var(--shadow);
+      outline: 1px solid rgba(44, 30, 18, .11);
+      outline-offset: -1px;
+    }
+    figcaption {
+      max-width: var(--read);
+      margin-top: .85rem;
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.62;
+    }
+
+    .loop-explanation {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      margin: 2rem 0 0;
+      overflow: hidden;
+      background: var(--line);
+      border-radius: var(--r-md);
+    }
+    .loop-explanation > div { padding: 1.35rem 1.4rem; background: var(--paper); }
+    .loop-explanation strong { display: block; margin-bottom: .4rem; font-family: "Songti SC", "STSong", serif; font-size: 1.25rem; }
+    .loop-explanation p { margin: 0; color: var(--ink-soft); }
+
+    .tool {
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr);
+      gap: 2.2rem;
+      padding: 3rem 0;
+      border-top: 1px solid var(--line);
+    }
+    .tool:first-of-type { margin-top: 2.3rem; }
+    .tool-index {
+      color: var(--signal-dark);
+      font-size: clamp(2.7rem, 6vw, 4.6rem);
+      font-weight: 820;
+      letter-spacing: -.06em;
+      line-height: .9;
+    }
+    .tool-copy { min-width: 0; }
+    .tool-copy > p { max-width: var(--read); color: var(--ink-soft); }
+    .explain-layers {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      margin: 1.8rem 0 0;
+      overflow: hidden;
+      background: var(--line);
+      border-radius: var(--r-md);
+    }
+    .explain-layer { min-height: 190px; padding: 1.15rem 1.05rem 1.25rem; background: var(--paper); }
+    .explain-layer span {
+      display: inline-grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      margin-bottom: .9rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: 50%;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .7rem;
+      font-weight: 760;
+    }
+    .explain-layer h3 { font-size: 1.04rem; }
+    .explain-layer p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.62; }
+
+    .speed-regulator {
+      margin: 2rem 0 0;
+      padding: 1.5rem;
+      background: var(--ink);
+      color: oklch(91% 0.012 80);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+    }
+    .regulator-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: baseline;
+      margin-bottom: 1.1rem;
+    }
+    .regulator-head strong { font-family: "Songti SC", "STSong", serif; font-size: 1.45rem; }
+    .regulator-head span { color: oklch(74% 0.017 80); font-size: .75rem; }
+    .pace-line {
+      display: grid;
+      grid-template-columns: 128px 1fr 46px;
+      gap: .85rem;
+      align-items: center;
+    }
+    .pace-line + .pace-line { margin-top: .8rem; }
+    .pace-line label { color: oklch(79% 0.015 80); font-size: .78rem; }
+    .pace-track { height: 11px; overflow: hidden; background: oklch(31% 0.02 55); border-radius: var(--r-pill); }
+    .pace-fill { height: 100%; border-radius: inherit; }
+    .pace-fill.ai { width: 93%; background: oklch(83% 0.012 80); }
+    .pace-fill.human { width: 46%; background: var(--signal); }
+    .pace-line b { font-family: "SFMono-Regular", Consolas, monospace; font-size: .75rem; font-variant-numeric: tabular-nums; }
+    .quiz-intro { margin: 1.4rem 0 0; color: oklch(81% 0.013 80); font-size: .9rem; }
+
+    .quiz {
+      margin-top: 1.2rem;
+      padding: 1.2rem;
+      color: var(--ink);
+      background: var(--paper);
+      border-radius: var(--r-md);
+    }
+    .quiz fieldset { margin: 0; padding: 0; border: 0; }
+    .quiz fieldset + fieldset { margin-top: 1.3rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+    .quiz legend { width: 100%; margin-bottom: .7rem; font-weight: 760; line-height: 1.5; }
+    .quiz-options { display: grid; gap: .55rem; }
+    .quiz-option {
+      position: relative;
+      display: flex;
+      gap: .65rem;
+      align-items: flex-start;
+      min-height: 42px;
+      padding: .62rem .7rem;
+      background: var(--canvas);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+    }
+    .quiz-option input { margin-top: .35rem; accent-color: var(--signal-dark); }
+    .quiz-actions { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; margin-top: 1.25rem; }
+    .quiz-button {
+      min-height: 42px;
+      padding: 0 1rem;
+      color: var(--paper);
+      background: var(--signal-dark);
+      border: 0;
+      border-radius: var(--r-sm);
+      font-weight: 760;
+      cursor: pointer;
+      transition: transform 140ms cubic-bezier(.16, 1, .3, 1), background-color 140ms ease-out;
+    }
+    .quiz-reset { color: var(--muted); background: transparent; }
+    .quiz-result { min-height: 1.5rem; margin: 0; font-size: .9rem; font-weight: 700; }
+    .quiz-result.good { color: var(--good); }
+    .quiz-result.try { color: var(--signal-dark); }
+
+    .media-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin-top: 1.8rem;
+    }
+    .media-pair figure { margin: 0; }
+    .media-pair video { height: auto; }
+    .micro-principle {
+      max-width: var(--read);
+      margin: 1.7rem 0 0;
+      padding: 1.2rem 1.3rem;
+      background: var(--cool-soft);
+      border-radius: var(--r-md);
+    }
+    .micro-principle strong { color: var(--cool); }
+
+    .shared-space {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: center;
+      gap: .85rem;
+      margin: 2rem 0 0;
+    }
+    .shared-node {
+      min-height: 150px;
+      display: grid;
+      align-content: center;
+      padding: 1.1rem;
+      background: var(--paper);
+      border-radius: var(--r-md);
+      box-shadow: 0 1px 2px rgba(57, 39, 22, .08);
+    }
+    .shared-node:nth-child(3) { background: var(--signal-soft); }
+    .shared-node strong { display: block; margin-bottom: .4rem; font-family: "Songti SC", "STSong", serif; font-size: 1.12rem; }
+    .shared-node p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.55; }
+    .shared-arrow { color: var(--signal-dark); font-size: 1.45rem; }
+
+    .claim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      margin-top: 1.8rem;
+      overflow: hidden;
+      background: var(--line);
+      border-radius: var(--r-md);
+    }
+    .claim-grid > div { padding: 1.3rem 1.4rem; background: var(--paper); }
+    .claim-grid strong { display: block; margin-bottom: .45rem; font-family: "Songti SC", "STSong", serif; font-size: 1.18rem; }
+    .claim-grid p { margin: 0; color: var(--ink-soft); }
+
+    blockquote {
+      max-width: 900px;
+      margin: 2.4rem 0;
+      padding: 0;
+      color: var(--signal-dark);
+      font-size: clamp(2rem, 4.4vw, 3.75rem);
+      font-weight: 780;
+      line-height: 1.16;
+    }
+    blockquote footer { margin-top: 1rem; color: var(--muted); font-family: ui-sans-serif, -apple-system, "PingFang SC", sans-serif; font-size: .82rem; font-weight: 500; }
+    .takeaway-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin: 2rem 0 0;
+      overflow: hidden;
+      background: var(--line);
+      border-radius: var(--r-md);
+    }
+    .takeaway-list > div { padding: 1.35rem; background: var(--paper); }
+    .takeaway-list span { display: block; margin-bottom: .55rem; color: var(--signal-dark); font-family: "SFMono-Regular", Consolas, monospace; font-size: .7rem; font-weight: 760; }
+    .takeaway-list strong { display: block; margin-bottom: .45rem; font-family: "Songti SC", "STSong", serif; font-size: 1.18rem; }
+    .takeaway-list p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+    details.source-details {
+      max-width: var(--read);
+      margin-top: 1.6rem;
+      background: var(--paper-2);
+      border-radius: var(--r-sm);
+    }
+    details.source-details summary { min-height: 44px; padding: .7rem .9rem; cursor: pointer; font-weight: 700; }
+    .source-detail-body { padding: 0 .95rem .95rem; color: var(--ink-soft); font-size: .9rem; }
+
+    .page-footer { padding-top: 2.5rem; color: var(--muted); font-size: .82rem; }
+    .page-footer p { margin-bottom: .65rem; }
+    .tags { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1rem 0 1.4rem; }
+    .tag { padding: .28rem .55rem; color: var(--ink-soft); background: var(--paper-2); border-radius: var(--r-pill); font-size: .68rem; }
+    .production-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .5rem;
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .production-label { margin-right: .15rem; color: var(--ink-soft); font-weight: 700; }
+    .production-chip { display: inline-flex; overflow: hidden; background: var(--paper-2); border-radius: var(--r-pill); }
+    .production-key, .production-value { padding: .24rem .5rem; }
+    .production-key { color: var(--muted); background: var(--paper-deep); font-family: "SFMono-Regular", Consolas, monospace; font-size: .66rem; }
+    .production-value { color: var(--ink-soft); font-weight: 700; }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .hero-grid { grid-template-columns: 1fr; }
+      .bottleneck-board { max-width: 620px; transform: none; }
+      .explain-layers { grid-template-columns: 1fr 1fr; }
+      .shared-space { grid-template-columns: 1fr; }
+      .shared-arrow { transform: rotate(90deg); justify-self: center; }
+    }
+    @media (max-width: 720px) {
+      .top-link:not(.source) { display: none; }
+      .layout { width: min(100% - 1.25rem, var(--max)); padding-top: 2.8rem; }
+      h1 { font-size: clamp(2.75rem, 15vw, 4.4rem); }
+      section { padding: 4.2rem 0; }
+      .pivot { grid-template-columns: 1fr; }
+      .pivot-arrow { justify-self: center; transform: rotate(90deg); }
+      .loop-explanation, .claim-grid, .takeaway-list, .media-pair { grid-template-columns: 1fr; }
+      .tool { grid-template-columns: 1fr; gap: 1rem; }
+      .tool-index { font-size: 3rem; }
+      .explain-layers { grid-template-columns: 1fr; }
+      .explain-layer { min-height: 0; }
+      .pace-line { grid-template-columns: 105px 1fr 40px; gap: .55rem; }
+      .regulator-head { display: block; }
+      .regulator-head span { display: block; margin-top: .35rem; }
+    }
+    @media (max-width: 430px) {
+      .topbar-inner { width: calc(100% - 1rem); }
+      .top-link.source { padding: 0 .65rem; }
+      .hero { padding-bottom: 3.8rem; }
+      .bottleneck-board { padding: 1.05rem; }
+      .meter-value { font-size: 1.35rem; }
+      .speed-regulator { padding: 1.05rem; border-radius: var(--r-md); }
+      .quiz { padding: .9rem; }
+      .pace-line { grid-template-columns: 1fr 42px; }
+      .pace-line label { grid-column: 1 / -1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到正文</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">视觉阅读 / 理解速度实验</a>
+      <nav class="top-links" aria-label="顶部导航">
+        <a class="top-link" href="#tools">三种工具</a>
+        <a class="top-link" href="#quiz">理解测验</a>
+        <a class="top-link source" href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck.html" target="_blank" rel="noopener">阅读原文</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout" id="top">
+    <main id="main-content">
+      <header class="hero">
+        <div class="hero-grid">
+          <div>
+            <div class="eyebrow"><span>Geoffrey Litt</span><span>2026-07-02</span><span>Human × AI</span></div>
+            <h1><span>代码越写越快，</span><span>理解为什么</span><span>成了新瓶颈？</span></h1>
+            <p class="hero-deck">Agent 可以越来越自主地写代码、跑测试、验证结果。但一个项目不是一次性交付，而是人与 Agent 共同推进的许多轮循环。人若失去系统的心智模型，也会失去提出下一个好问题的能力。</p>
+            <div class="hero-meta">
+              <span>原文：Understanding is the new bottleneck</span>
+              <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck.html" target="_blank" rel="noopener">Geoffrey Litt</a>
+            </div>
+          </div>
+          <div class="bottleneck-board" aria-label="Agent 产出速度与人类理解速度的示意比较">
+            <div class="meter">
+              <div class="meter-head"><span class="meter-label">AGENT OUTPUT</span><span class="meter-value">92</span></div>
+              <div class="meter-track"><div class="meter-fill output"></div></div>
+            </div>
+            <div class="meter">
+              <div class="meter-head"><span class="meter-label">HUMAN UNDERSTANDING</span><span class="meter-value">42</span></div>
+              <div class="meter-track"><div class="meter-fill understanding"></div><span class="meter-mark" aria-hidden="true"></span></div>
+            </div>
+            <p class="board-note">这不是原文测得的数字，而是一张关系图：当产出速度越过人的理解速度，<strong>瓶颈从“写出来”转移到“跟得上”</strong>。</p>
+          </div>
+        </div>
+        <div class="tldr">
+          <div class="tldr-label">TL;DR / 30 秒</div>
+          <p><strong>问题：</strong>Agent 写得越来越快，人还有必要理解代码吗？<strong>作者答案：</strong>有必要，但主要不只是为了验收正确性，而是为了继续参与创造。<strong>办法：</strong>让 Agent 同时生成解释材料、理解测验和可操作的微型世界，并把这些产物放进团队共享空间。<strong>边界：</strong>这是作者的实践与教育类比，不是证明某种流程必然提高工程指标的实验。</p>
+        </div>
+      </header>
+
+      <section id="why">
+        <span class="section-no">01 / WHY UNDERSTAND</span>
+        <h2>理解的目的，不只是给结果打勾</h2>
+        <p class="lead">许多支持“人要懂代码”的论点仍停留在检查 Agent：看它是否符合规格、架构是否合理、最后给出通过或拒绝。但 Litt 认为，这个答案会随着 Agent 自我验证能力提升而越来越不够。</p>
+
+        <div class="pivot" aria-label="从为了验收到为了参与的目的转向">
+          <article class="pivot-side">
+            <span>UNDERSTAND TO VERIFY</span>
+            <strong>为了验收</strong>
+            <p>问题是二元的：它做对了吗？人站在循环外，负责最后的 thumbs-up / thumbs-down。</p>
+          </article>
+          <div class="pivot-arrow" aria-hidden="true">→</div>
+          <article class="pivot-side participate">
+            <span>UNDERSTAND TO PARTICIPATE</span>
+            <strong>为了参与</strong>
+            <p>问题是生成式的：理解了这套系统后，我们接下来还能想到什么？人留在创造循环里。</p>
+          </article>
+        </div>
+
+        <div class="reading-copy">
+          <p>项目不是“给 Agent 一个任务，收回一个答案”的单循环。它由许多次来回构成：实现带来新认识，新认识催生下一步构想。你脑中拥有的概念、边界和因果关系，决定了你能否流畅地提出下一轮。</p>
+          <p>因此，理解不是交付后的审计成本，而是下一次创造的输入。如果短期一直跳过理解，作者把它连接到 <a href="https://margaretstorey.com/blog/2026/02/09/cognitive-debt/" target="_blank" rel="noopener">cognitive debt</a>：眼下似乎节省时间，后来却可能连“项目为什么变成这样”都说不清。</p>
+        </div>
+
+        <figure>
+          <img src="imgs/many-loops.webp" width="1600" height="900" alt="原文幻灯片画出人与 Agent 反复协作的多个循环，每轮理解都会带来下一步想法" loading="lazy">
+          <figcaption>原文核心图：理解不是循环末尾的一次检查，而是产生“下一个想法”的条件。项目越依赖多轮 Agent 协作，这个条件越重要。图片来自原文演讲幻灯片。</figcaption>
+        </figure>
+
+        <div class="loop-explanation">
+          <div><strong>没有心智模型</strong><p>你可以继续给指令，但更容易只能要求“再优化一点”“再修一下”，难以判断系统还能朝哪里演化。</p></div>
+          <div><strong>拥有心智模型</strong><p>你知道现有概念、约束和取舍，因此能提出带方向的新问题，并与 Agent 共同推进设计。</p></div>
+        </div>
+      </section>
+
+      <section id="tools">
+        <span class="section-no">02 / BUILD UNDERSTANDING</span>
+        <h2>把教育工具搬进 Agent 工作流</h2>
+        <p class="lead">Litt 的关键转折是：既然“如何帮助人理解”不是新问题，就不必只盯着代码审查工具。我们可以从教育中借用解释、主动回忆、可操作环境与共同建构知识的办法。</p>
+
+        <article class="tool" id="explanations">
+          <div class="tool-index">01</div>
+          <div class="tool-copy">
+            <h3>解释材料：先建立直觉，再进入代码</h3>
+            <p>Agent 完成工作时，不只交付 diff，也可以交付一份精心组织的 explainer。作者每天使用自己的 <a href="https://gist.github.com/geoffreylitt/a29df1b5f9865506e8952488eac3d524" target="_blank" rel="noopener"><code>/explain-diff</code> skill</a>，把改动组织成 HTML、Markdown 或 Notion 文档。</p>
+            <div class="explain-layers" aria-label="高质量代码解释的四层结构">
+              <div class="explain-layer"><span>1</span><h3>补背景</h3><p>先说明原来有什么、系统如何工作，避免读者从改动中反推上下文。</p></div>
+              <div class="explain-layer"><span>2</span><h3>直觉先行</h3><p>先讲目标和核心概念，例如先理解等距投影，再看花园场景的代码。</p></div>
+              <div class="explain-layer"><span>3</span><h3>可操作图解</h3><p>允许拖动、试错和观察状态变化，让抽象关系变成身体可感的反馈。</p></div>
+              <div class="explain-layer"><span>4</span><h3>文学化 diff</h3><p>按概念顺序讲改动，穿插上下文和代码，不按文件名字母顺序倾倒补丁。</p></div>
+            </div>
+            <figure>
+              <img src="imgs/literate-diff.webp" width="1600" height="900" alt="原文展示的 literate diff 页面，代码改动按照概念顺序嵌入解释文字" loading="lazy">
+              <figcaption>“Literate diff”不是删除原始 diff。作者仍会读代码，但先用一份按概念组织的解释包建立路径，再进入细节。图片来自原文演讲幻灯片。</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="tool" id="quiz">
+          <div class="tool-index">02</div>
+          <div class="tool-copy">
+            <h3>理解测验：给工作流加一个限速器</h3>
+            <p>阅读很容易制造“我已经懂了”的错觉。作者受 Andy Matuschak 和 Michael Nielsen 的启发，在 explainer 结尾放五道题，并给自己定规则：答不过就不把代码发给别人，审查别人代码时也一样。</p>
+
+            <div class="speed-regulator">
+              <div class="regulator-head"><strong>Quiz as speed regulator</strong><span>原文概念示意</span></div>
+              <div class="pace-line"><label>Agent 循环速度</label><div class="pace-track"><div class="pace-fill ai"></div></div><b>快</b></div>
+              <div class="pace-line"><label>人类理解速度</label><div class="pace-track"><div class="pace-fill human"></div></div><b>慢</b></div>
+              <p class="quiz-intro">测验不是为了证明你聪明，而是机械地暂停一下，问自己：我真的能从记忆中重建关键关系吗？</p>
+
+              <form class="quiz" id="understandingQuiz">
+                <fieldset>
+                  <legend>1. 作者为什么认为“为了验收”不是理解的完整理由？</legend>
+                  <div class="quiz-options">
+                    <label class="quiz-option"><input type="radio" name="q1" value="a"> 因为代码审查已经完全没有价值</label>
+                    <label class="quiz-option"><input type="radio" name="q1" value="b"> 因为理解还决定人能否提出下一轮构想</label>
+                    <label class="quiz-option"><input type="radio" name="q1" value="c"> 因为 Agent 无法验证自己的工作</label>
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>2. “Literate diff”主要改变了什么？</legend>
+                  <div class="quiz-options">
+                    <label class="quiz-option"><input type="radio" name="q2" value="a"> 用概念顺序、解释和代码片段重组阅读路径</label>
+                    <label class="quiz-option"><input type="radio" name="q2" value="b"> 自动隐藏所有实现细节</label>
+                    <label class="quiz-option"><input type="radio" name="q2" value="c"> 只展示通过测试的文件</label>
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>3. 微型世界与“让 Agent 自己调试”的关键差别是什么？</legend>
+                  <div class="quiz-options">
+                    <label class="quiz-option"><input type="radio" name="q3" value="a"> 微型世界一定更快生成正确代码</label>
+                    <label class="quiz-option"><input type="radio" name="q3" value="b"> 人亲自操作系统，在过程中形成直觉</label>
+                    <label class="quiz-option"><input type="radio" name="q3" value="c"> 微型世界不需要显示内部状态</label>
+                  </div>
+                </fieldset>
+                <div class="quiz-actions">
+                  <button class="quiz-button" type="submit">检查理解</button>
+                  <button class="quiz-button quiz-reset" type="reset">重新作答</button>
+                  <p class="quiz-result" id="quizResult" aria-live="polite"></p>
+                </div>
+              </form>
+            </div>
+          </div>
+        </article>
+
+        <article class="tool" id="microworlds">
+          <div class="tool-index">03</div>
+          <div class="tool-copy">
+            <h3>微型世界：不要只看答案，进去生活一会儿</h3>
+            <p>受 Seymour Papert “生活在 Mathland” 的教育思想启发，作者让 Agent 写出帮助自己理解其他代码的小工具。关键不是让 Agent 替他调试，而是让自己在一个被精心布置的环境里操作、观察、建立直觉。</p>
+            <div class="media-pair">
+              <figure>
+                <video controls muted playsinline preload="metadata" poster="imgs/prolog-microworld-poster.jpg" width="1600" height="832" aria-label="Prolog 解释器微型世界演示">
+                  <source src="imgs/prolog-microworld.mp4" type="video/mp4">
+                  浏览器无法播放此视频。
+                </video>
+                <figcaption><strong>Prolog 调试器：</strong>沿时间轴逐步执行，查看栈和当前规则，甚至给自己的理解留下批注。亲自走一遍，理解在操作中生成。</figcaption>
+              </figure>
+              <figure>
+                <video controls muted playsinline preload="metadata" poster="imgs/migration-command-center-poster.jpg" width="1600" height="930" aria-label="网站迁移 command center 演示">
+                  <source src="imgs/migration-command-center.mp4" type="video/mp4">
+                  浏览器无法播放此视频。
+                </video>
+                <figcaption><strong>迁移 command center：</strong>旧站与新站并排，按步骤执行迁移，同时观察页面和文件树变化。作者得到接近手工迁移的理解，但过程更快、更清晰。</figcaption>
+              </figure>
+            </div>
+            <p class="micro-principle"><strong>最重要的原文例子：</strong>当 Claude 写出的迁移脚本难以审查时，作者没有要求更多解释，而是让 Claude 把迁移变成一个自己能逐步操作的“游戏控制台”。Agent 产出的不是最终答案，而是人类理解其他代码的媒介。</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="shared">
+        <span class="section-no">03 / SHARED SPACES</span>
+        <h2>个人理解之后，还要让团队拥有同一幅图</h2>
+        <p class="lead">共同的心智模型带来共同词汇。一个词能在不同人脑中唤起相似结构，团队才可能快速接续、即兴讨论，而不是每次从背景同步开始。</p>
+
+        <div class="shared-space" aria-label="从 Agent 产物到团队共享心智模型的流程">
+          <div class="shared-node"><strong>Agent 产出</strong><p>技术计划、解释文档、可运行演示，不只留在个人对话窗口。</p></div>
+          <div class="shared-arrow" aria-hidden="true">→</div>
+          <div class="shared-node"><strong>共享空间</strong><p>默认可评论、可补充、可讨论，让理解产物成为团队对象。</p></div>
+          <div class="shared-arrow" aria-hidden="true">→</div>
+          <div class="shared-node"><strong>共同语言</strong><p>成员围绕同一套概念和图像继续设计，而不是各自在孤岛里工作。</p></div>
+        </div>
+
+        <div class="reading-copy" style="margin-top: 1.8rem">
+          <p>作者用 Notion 的近期产品实践举例：Claude 和 Cursor agent 可以在协作页面中生成技术计划，团队成员立刻评论和讨论。这里既是他的工作经验，也带有明确的产品立场，因为作者在 Notion 工作。</p>
+        </div>
+        <div class="claim-grid">
+          <div><strong>文章提出的强主张</strong><p>共享环境能让人和 Agent 的理解产物进入团队对话，减少每个人各自与 Agent 工作形成的知识孤岛。</p></div>
+          <div><strong>文章没有证明的事</strong><p>它没有用对照实验说明某个协作产品或流程必然提升交付速度、缺陷率或团队绩效。</p></div>
+        </div>
+      </section>
+
+      <section id="augment">
+        <span class="section-no">04 / AUGMENT, NOT ONLY AUTOMATE</span>
+        <h2>计算机最初的愿景，本来就不只是替人做事</h2>
+        <p class="lead">文章最后把问题从“如何理解 Agent 写的代码”推到更大的尺度：AI 让模拟、解释和交互工具变得便宜，这也许让计算机重新成为一种帮助人理解复杂世界的媒介。</p>
+
+        <figure>
+          <img src="imgs/alan-kay-learning.webp" width="1600" height="900" alt="原文幻灯片展示 Alan Kay 对儿童通过交互式模拟学习物理的早期计算机愿景" loading="lazy">
+          <figcaption>作者回到 Alan Kay 约 50 年前的愿景：孩子不是被动看屏幕，而是一边玩交互模拟、一边改代码，从而理解物理。图片来自原文演讲幻灯片。</figcaption>
+        </figure>
+
+        <blockquote>
+          “The point was always to augment, not just automate.”
+          <footer>原文短句：重点始终是增强人，而不只是自动化。</footer>
+        </blockquote>
+
+        <div class="reading-copy">
+          <p>“把人移出循环”不是唯一未来。工具设计得当时，我们也可以更深地进入循环：更快得到可操作的解释、更早发现自己没懂、更容易在团队里建构共同模型。</p>
+          <p>这也是作者乐观的来源。AI 的价值不只在于代替人生产结果，也在于帮助人制造以前太贵、太慢、太难做的学习环境。</p>
+        </div>
+      </section>
+
+      <section id="practice">
+        <span class="section-no">05 / TAKE IT TO WORK</span>
+        <h2>把“理解”变成每轮交付的一部分</h2>
+        <p class="lead">如果把这篇文章压缩成一个可执行原则，它不是“所有代码都逐行手审”，而是：每当 Agent 提高产出速度，也同步投资能让人追上的理解产物。</p>
+
+        <div class="takeaway-list">
+          <div><span>BEFORE CODE</span><strong>先补齐背景与直觉</strong><p>让解释从系统原状、目标和关键概念开始，不要求读者直接跳入 diff。</p></div>
+          <div><span>BEFORE SHARE</span><strong>用回忆检验理解</strong><p>设置少量高质量问题。只有能从记忆重建关键因果，才算真正跟上。</p></div>
+          <div><span>WHEN ABSTRACT</span><strong>把系统做成可操作环境</strong><p>让人亲自推进状态、观察反馈。把 Agent 的代码生成能力用于制造理解工具。</p></div>
+        </div>
+
+        <details class="source-details">
+          <summary>这篇文章的适用边界与来源说明</summary>
+          <div class="source-detail-body">
+            <p>原文是 Geoffrey Litt 在 2026 年 7 月 AI Engineer conference 演讲的文字版，内容以个人实践、教育思想和产品例子为主。页面没有把它包装成经过实验验证的通用工程规律。</p>
+            <p>本页依据原文 HTML 全文、35 组演讲段落与幻灯片结构整理；使用了原文的 3 张幻灯片和 2 段演示视频。本页中的 “92 / 42” 仅为解释速度差的示意数字，不是原文数据。</p>
+          </div>
+        </details>
+
+        <footer class="page-footer">
+          <p>原文：<a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck.html" target="_blank" rel="noopener">Understanding is the new bottleneck</a> · Geoffrey Litt · 2026-07-02</p>
+          <p>延伸：<a href="https://margaretstorey.com/blog/2026/02/09/cognitive-debt/" target="_blank" rel="noopener">Cognitive Debt</a> · <a href="https://andymatuschak.org/books/" target="_blank" rel="noopener">Why books don’t work</a> · <a href="https://quantum.country/" target="_blank" rel="noopener">Quantum Country</a> · <a href="https://gist.github.com/geoffreylitt/a29df1b5f9865506e8952488eac3d524" target="_blank" rel="noopener">/explain-diff skill</a></p>
+          <div class="tags" aria-label="主题标签">
+            <span class="tag">Agent Systems</span><span class="tag">Software Engineering</span><span class="tag">Developer Tools</span><span class="tag">Human-AI Collaboration</span><span class="tag">Cognitive Debt</span>
+          </div>
+          <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh">
+            <span class="production-label">制作信息</span>
+            <span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span>
+            <span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span>
+          </p>
+        </footer>
+      </section>
+    </main>
+
+    <aside class="toc" aria-label="文章目录">
+      <p class="toc-label">阅读路径</p>
+      <a href="#why">01 · 为什么理解</a>
+      <a href="#tools">02 · 三种工具</a>
+      <a href="#explanations">解释材料</a>
+      <a href="#quiz">理解测验</a>
+      <a href="#microworlds">微型世界</a>
+      <a href="#shared">03 · 共享空间</a>
+      <a href="#augment">04 · 增强而非替代</a>
+      <a href="#practice">05 · 带回工作</a>
+    </aside>
+  </div>
+
+  <script>
+    const quiz = document.getElementById('understandingQuiz');
+    const quizResult = document.getElementById('quizResult');
+    const answers = { q1: 'b', q2: 'a', q3: 'b' };
+
+    quiz.addEventListener('submit', (event) => {
+      event.preventDefault();
+      let score = 0;
+      let answered = 0;
+      Object.entries(answers).forEach(([name, correct]) => {
+        const selected = quiz.querySelector(`input[name="${name}"]:checked`);
+        if (selected) {
+          answered += 1;
+          if (selected.value === correct) score += 1;
+        }
+      });
+      quizResult.className = 'quiz-result';
+      if (answered < 3) {
+        quizResult.textContent = `还有 ${3 - answered} 题未作答。`;
+        quizResult.classList.add('try');
+        return;
+      }
+      if (score === 3) {
+        quizResult.textContent = '3 / 3：你已经抓住作者的核心因果链。';
+        quizResult.classList.add('good');
+      } else {
+        quizResult.textContent = `${score} / 3：回看 verify / participate、literate diff 和微型世界三处。`;
+        quizResult.classList.add('try');
+      }
+    });
+
+    quiz.addEventListener('reset', () => {
+      window.setTimeout(() => {
+        quizResult.textContent = '';
+        quizResult.className = 'quiz-result';
+      }, 0);
+    });
+
+    const tocLinks = document.querySelectorAll('.toc a');
+    const observedSections = [...tocLinks]
+      .map((link) => document.querySelector(link.getAttribute('href')))
+      .filter(Boolean);
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        tocLinks.forEach((link) => {
+          link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`);
+        });
+      }, { rootMargin: '-20% 0px -62% 0px', threshold: [0.05, 0.2, 0.5] });
+      observedSections.forEach((section) => observer.observe(section));
+    }
+  </script>
+</body>
+</html>

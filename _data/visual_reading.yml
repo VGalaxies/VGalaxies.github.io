@@ -8,6 +8,17 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: understanding-is-the-new-bottleneck
+    title: 'Agent 写得越快，人为什么越需要理解代码'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Software Engineering'
+      - 'Developer Tools'
+      - 'Human-AI Collaboration'
+      - 'Cognitive Debt'
+    source_url: 'https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck.html'
   - slug: benchmarking-coding-agents-databricks-codebase
     title: '评测 Coding Agent，为什么不能只看模型排行榜'
     date: 2026-07-13
