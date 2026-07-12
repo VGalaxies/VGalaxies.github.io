@@ -8,6 +8,16 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: dspark-confidence-scheduled-speculative-decoding
+    title: 'DSpark：怎么让并行草稿的投机解码在高并发下真正提速'
+    date: 2026-07-12
+    source_type: paper
+    tags:
+      - 'Speculative Decoding'
+      - 'LLM Serving'
+      - 'Semi-Autoregressive Generation'
+      - 'Inference Scheduling'
+    source_url: 'https://arxiv.org/abs/2607.05147'
   - slug: dspark-confidence-scheduled-speculative-decoding-gpt
     title: 'DSpark 先把草稿写顺，再决定哪些值得验证'
     date: 2026-07-12
