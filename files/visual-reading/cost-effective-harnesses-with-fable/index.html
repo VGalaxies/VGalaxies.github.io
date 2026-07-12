@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lance Martin《Cost effective harnesses with Fable》中文可视化阅读：如何根据任务中的判断力分布与协调成本，在 orchestrator、advisor、verifier 和直接执行之间选择。">
+  <meta name="visual-reading-tags" content="Agent Systems, Model Routing, Cost Optimization, Multi-Agent Systems">
+  <title>把前沿模型放在最需要判断力的位置</title>
+  <style>
+    :root {
+      --canvas: #f2f0e9;
+      --paper: #faf9f5;
+      --paper-2: #efede6;
+      --paper-deep: #e6e2d7;
+      --ink: #181816;
+      --ink-soft: #3f3d38;
+      --muted: #716d65;
+      --line: #d6d1c5;
+      --fable: #b76032;
+      --fable-soft: #ead4c7;
+      --sonnet: #557d9b;
+      --sonnet-soft: #d7e2e8;
+      --base: #777773;
+      --base-soft: #deded8;
+      --good: #456b54;
+      --danger: #9d4e39;
+      --shadow: 0 1px 2px rgba(38, 32, 23, .08), 0 16px 45px rgba(38, 32, 23, .055);
+      --r-sm: 7px;
+      --r-md: 14px;
+      --r-lg: 24px;
+      --r-pill: 999px;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(84, 78, 66, .035) 1px, transparent 1px),
+        var(--canvas);
+      background-size: 100% 32px;
+      font-family: "Avenir Next", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--fable); text-underline-offset: .2em; }
+    a:hover { color: #88401f; }
+    img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+    p { margin: 0 0 1.05rem; text-wrap: pretty; }
+    strong { font-weight: 760; }
+    code, .mono {
+      font-family: "SFMono-Regular", Consolas, ui-monospace, monospace;
+      font-size: .92em;
+    }
+    summary, a { touch-action: manipulation; }
+    summary:focus-visible, a:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--fable) 32%, transparent);
+      outline-offset: 3px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: color-mix(in srgb, var(--canvas) 94%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      backdrop-filter: blur(12px);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Noto Serif SC", "Songti SC", serif;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .top-links { display: flex; align-items: center; gap: .5rem; }
+    .top-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .82rem;
+      color: var(--muted);
+      border-radius: var(--r-pill);
+      font-size: .8rem;
+      text-decoration: none;
+    }
+    .top-link.source { color: var(--paper); background: var(--ink); }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 210px;
+      gap: 4rem;
+      padding: 4.5rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.2rem;
+      align-self: start;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .toc-label {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      margin-bottom: .7rem;
+      color: var(--ink-soft);
+      font-size: .68rem;
+      font-weight: 780;
+      letter-spacing: .12em;
+    }
+    .toc-label::before { content: ""; width: 20px; height: 2px; background: var(--fable); }
+    .toc a {
+      display: block;
+      min-height: 38px;
+      padding: .52rem .25rem .52rem .85rem;
+      color: var(--muted);
+      border-left: 1px solid var(--line);
+      text-decoration: none;
+      line-height: 1.35;
+    }
+    .toc a.active { color: var(--fable); border-left-color: var(--fable); font-weight: 720; }
+
+    .hero {
+      padding: 0 0 4.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem 1rem;
+      margin-bottom: 1.15rem;
+      color: var(--fable);
+      font-size: .74rem;
+      font-weight: 780;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 {
+      font-family: "Iowan Old Style", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+      letter-spacing: -.025em;
+      text-wrap: balance;
+    }
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-size: clamp(2.65rem, 6.2vw, 5.7rem);
+      line-height: .98;
+      font-weight: 760;
+    }
+    .hero-deck {
+      max-width: 760px;
+      margin-top: 1.7rem;
+      color: var(--ink-soft);
+      font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+      line-height: 1.72;
+    }
+    .hero-figure {
+      position: relative;
+      margin: 2.5rem 0 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .hero-figure img { width: 100%; height: auto; }
+    .hero-figure figcaption {
+      position: absolute;
+      right: 1rem;
+      bottom: 1rem;
+      max-width: 330px;
+      padding: .65rem .8rem;
+      color: var(--paper);
+      background: color-mix(in srgb, var(--ink) 90%, transparent);
+      border-radius: var(--r-sm);
+      font-size: .72rem;
+      line-height: 1.45;
+    }
+    .source-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem 1.2rem;
+      margin-top: 1.2rem;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+
+    section { padding: 5.3rem 0; border-bottom: 1px solid var(--line); }
+    .section-no {
+      display: block;
+      margin-bottom: .8rem;
+      color: var(--fable);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .72rem;
+      font-weight: 760;
+      letter-spacing: .08em;
+    }
+    h2 { max-width: 830px; margin: 0 0 1.15rem; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1.08; }
+    h3 { margin: 0 0 .6rem; font-size: 1.35rem; line-height: 1.28; }
+    .lead { max-width: 770px; color: var(--ink-soft); font-size: 1.05rem; }
+    .prose { max-width: 760px; }
+
+    .tldr {
+      display: grid;
+      grid-template-columns: 1.1fr 1.35fr 1fr;
+      margin-top: 2.4rem;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .tldr > div { min-width: 0; padding: 1.45rem; border-right: 1px solid var(--line); }
+    .tldr > div:last-child { border-right: 0; }
+    .tldr b { display: block; margin-bottom: .55rem; color: var(--fable); font-size: .7rem; letter-spacing: .1em; }
+    .tldr p { margin: 0; font-size: .92rem; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: .55rem 1rem; margin: 1.2rem 0 0; color: var(--muted); font-size: .74rem; }
+    .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+    .legend i { width: 10px; height: 10px; border-radius: 50%; }
+    .legend .fable { background: var(--fable); }
+    .legend .sonnet { background: var(--sonnet); }
+    .legend .base { background: var(--base); }
+
+    .shape-figure, .evidence-figure {
+      margin: 2.2rem 0 0;
+      padding: .75rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .shape-figure img, .evidence-figure img {
+      width: 100%;
+      height: auto;
+      border-radius: calc(var(--r-lg) - 7px);
+    }
+    figcaption { padding: .9rem .5rem .25rem; color: var(--muted); font-size: .8rem; line-height: 1.58; }
+
+    .roles {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .role {
+      padding: 1.25rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: color-mix(in srgb, var(--paper) 86%, transparent);
+    }
+    .role-kicker { margin-bottom: .8rem; color: var(--fable); font-size: .68rem; font-weight: 780; letter-spacing: .1em; }
+    .role p { margin: 0; color: var(--muted); font-size: .84rem; }
+    .spark {
+      height: 76px;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      align-items: end;
+      gap: 4px;
+      margin: 1rem 0;
+      padding: .45rem;
+      border-left: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .spark i { min-height: 13px; background: var(--sonnet-soft); border-radius: 2px 2px 0 0; }
+    .spark i.hot { background: var(--fable); }
+    .spark.orchestrator i:nth-child(-n+2) { height: 92%; }
+    .spark.orchestrator i:nth-child(n+3) { height: 28%; }
+    .spark.advisor i { height: 25%; }
+    .spark.advisor i:nth-child(3), .spark.advisor i:nth-child(6) { height: 88%; }
+    .spark.verifier i { height: 26%; }
+    .spark.verifier i:last-child { height: 92%; }
+
+    .experiment-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(250px, .72fr);
+      gap: 1.3rem;
+      align-items: start;
+      margin-top: 2rem;
+    }
+    .metric-stack { display: grid; gap: .8rem; }
+    .metric {
+      padding: 1.3rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--paper);
+    }
+    .metric strong { display: block; color: var(--fable); font-family: "Iowan Old Style", Georgia, serif; font-size: 2.25rem; line-height: 1; }
+    .metric span { display: block; margin-top: .45rem; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+    .metric.blue strong { color: var(--sonnet); }
+    .metric.dark strong { color: var(--ink); }
+
+    .checkpoint {
+      margin-top: 2.2rem;
+      padding: 1.5rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--paper-2);
+    }
+    .checkpoint-head { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+    .checkpoint-head b { color: var(--fable); font-size: .74rem; letter-spacing: .08em; }
+    .checkpoint-head span { color: var(--muted); font-size: .76rem; }
+    .timeline { display: grid; grid-template-columns: repeat(11, 1fr); gap: 5px; align-items: center; }
+    .timeline i { height: 9px; background: var(--sonnet); border-radius: var(--r-pill); opacity: .7; }
+    .timeline i:nth-child(1), .timeline i:nth-child(5), .timeline i:nth-child(9) { height: 24px; background: var(--fable); opacity: 1; }
+    .timeline-labels { display: flex; justify-content: space-between; margin-top: .55rem; color: var(--muted); font-size: .68rem; }
+    .finding {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+      margin-top: 1.3rem;
+      padding-top: 1.3rem;
+      border-top: 1px solid var(--line);
+    }
+    .finding-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      color: var(--paper);
+      background: var(--fable);
+      border-radius: 50%;
+      font-family: Georgia, serif;
+      font-size: 1.25rem;
+    }
+    .finding p { margin: 0; color: var(--ink-soft); }
+
+    .cost-equation {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: .75rem;
+      align-items: center;
+      margin: 2.1rem 0;
+      padding: 1.25rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .cost-term { min-height: 112px; display: grid; align-content: center; padding: 1rem; border: 1px solid rgba(255,255,255,.15); border-radius: var(--r-sm); }
+    .cost-term b { display: block; margin-bottom: .35rem; font-family: "Iowan Old Style", "Noto Serif SC", serif; font-size: 1.1rem; }
+    .cost-term span { color: #c8c4bb; font-size: .75rem; line-height: 1.5; }
+    .cost-op { color: #b9b4a9; font-size: 1.35rem; }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1.3rem;
+    }
+    .case {
+      padding: 1.35rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--paper);
+    }
+    .case.easy { border-top: 4px solid var(--danger); }
+    .case.full { border-top: 4px solid var(--good); }
+    .case-kicker { color: var(--muted); font-family: ui-monospace, monospace; font-size: .7rem; letter-spacing: .08em; }
+    .case h3 { margin-top: .5rem; }
+    .case dl { display: grid; grid-template-columns: 1fr auto; gap: .45rem 1rem; margin: 1rem 0 0; font-size: .82rem; }
+    .case dt { color: var(--muted); }
+    .case dd { margin: 0; font-weight: 740; text-align: right; }
+
+    .rules { margin-top: 2.4rem; counter-reset: rule; }
+    .rule {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr) minmax(170px, .34fr);
+      gap: 1.4rem;
+      padding: 1.5rem 0;
+      border-top: 1px solid var(--line);
+      counter-increment: rule;
+    }
+    .rule::before {
+      content: "0" counter(rule);
+      color: var(--fable);
+      font-family: "Iowan Old Style", Georgia, serif;
+      font-size: 2.25rem;
+      line-height: 1;
+    }
+    .rule p { margin: .25rem 0 0; color: var(--ink-soft); }
+    .rule-tag {
+      align-self: start;
+      padding: .55rem .7rem;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: var(--r-pill);
+      font-size: .7rem;
+      text-align: center;
+    }
+
+    .decision-map {
+      display: grid;
+      grid-template-columns: 150px repeat(2, minmax(0, 1fr));
+      margin-top: 2.2rem;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--paper);
+    }
+    .decision-map > div { min-height: 130px; padding: 1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .decision-map > div:nth-child(3n) { border-right: 0; }
+    .decision-map > div:nth-last-child(-n+3) { border-bottom: 0; }
+    .axis, .corner { display: grid; align-content: center; color: var(--muted); font-size: .72rem; }
+    .axis.top { min-height: 74px; text-align: center; }
+    .cell { position: relative; }
+    .cell b { display: block; margin-bottom: .4rem; color: var(--fable); font-family: "Iowan Old Style", "Noto Serif SC", serif; font-size: 1.2rem; }
+    .cell p { margin: 0; color: var(--muted); font-size: .78rem; }
+    .cell.direct b { color: var(--base); }
+    .cell.advisor b { color: var(--sonnet); }
+    .note {
+      margin-top: .85rem;
+      color: var(--muted);
+      font-size: .74rem;
+    }
+
+    details {
+      margin-top: 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: color-mix(in srgb, var(--paper) 80%, transparent);
+    }
+    summary {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: .75rem 1rem;
+      cursor: pointer;
+      color: var(--ink-soft);
+      font-size: .8rem;
+      font-weight: 720;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--fable); font-size: 1.25rem; font-weight: 400; }
+    details[open] summary::after { content: "−"; }
+    .details-body { padding: 0 1rem 1rem; color: var(--muted); font-size: .8rem; }
+    .details-body p:last-child { margin-bottom: 0; }
+
+    .closing {
+      padding-bottom: 3.5rem;
+      border-bottom: 0;
+    }
+    .closing-quote {
+      max-width: 850px;
+      margin: 2rem 0 0;
+      padding-left: 1.3rem;
+      border-left: 4px solid var(--fable);
+      font-family: "Iowan Old Style", "Noto Serif SC", serif;
+      font-size: clamp(1.35rem, 2.7vw, 2rem);
+      line-height: 1.5;
+    }
+    footer {
+      margin-top: 2rem;
+      padding-top: 1.7rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+    .footer-grid p { margin: 0; }
+    .production-meta {
+      --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep)));
+      --production-ink: var(--ink);
+      --production-muted: var(--muted);
+      --production-line: var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1.25rem 0 0;
+      padding: .6rem;
+      color: var(--production-muted);
+      background: var(--production-surface);
+      border: 1px solid var(--production-line);
+      border-radius: var(--r-sm);
+    }
+    .production-label { padding: 0 .35rem; color: var(--production-ink); font-weight: 760; }
+    .production-chip { display: inline-flex; overflow: hidden; border: 1px solid var(--production-line); border-radius: var(--r-pill); background: var(--paper); }
+    .production-key, .production-value { padding: .25rem .52rem; }
+    .production-key { color: var(--production-muted); border-right: 1px solid var(--production-line); font-family: ui-monospace, monospace; font-size: .68rem; }
+    .production-value { color: var(--production-ink); font-weight: 720; }
+
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .tldr, .roles { grid-template-columns: 1fr; }
+      .tldr > div { border-right: 0; border-bottom: 1px solid var(--line); }
+      .tldr > div:last-child { border-bottom: 0; }
+      .experiment-grid { grid-template-columns: 1fr; }
+      .metric-stack { grid-template-columns: repeat(3, 1fr); }
+      .rule { grid-template-columns: 58px minmax(0, 1fr); }
+      .rule-tag { grid-column: 2; justify-self: start; }
+    }
+    @media (max-width: 680px) {
+      .top-links .top-link:not(.source) { display: none; }
+      .layout { width: min(100% - 1.2rem, var(--max)); padding-top: 2.7rem; }
+      h1 { font-size: clamp(2.45rem, 13vw, 4rem); }
+      section { padding: 4rem 0; }
+      .hero-figure figcaption { position: static; max-width: none; border-radius: 0; }
+      .metric-stack, .comparison { grid-template-columns: 1fr; }
+      .cost-equation { grid-template-columns: 1fr; }
+      .cost-op { text-align: center; }
+      .decision-map { grid-template-columns: 1fr; }
+      .decision-map > div { border-right: 0 !important; border-bottom: 1px solid var(--line) !important; }
+      .decision-map > div:nth-child(-n+3) { display: none; }
+      .decision-map > div:last-child { border-bottom: 0 !important; }
+      .footer-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">VGalaxies · Visual Reading</a>
+      <nav class="top-links" aria-label="顶部导航">
+        <a class="top-link" href="#rules">设计规则</a>
+        <a class="top-link source" href="https://x.com/RLanceMartin/status/2075641284635799865" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout" id="top">
+    <main>
+      <header class="hero">
+        <div class="eyebrow"><span>Agent Harness</span><span>·</span><span>Lance Martin</span><span>·</span><span>2026-07-10</span></div>
+        <h1>把前沿模型放在最需要判断力的位置</h1>
+        <p class="hero-deck">“便宜 worker + 聪明 lead”听起来天然省钱，但原文的两个实验给出了更严格的答案：先看<strong>判断力在任务中怎样分布</strong>，再看省下的执行 token 能否覆盖<strong>委派与协调成本</strong>。</p>
+
+        <figure class="hero-figure">
+          <img src="imgs/cover.jpg" width="1200" height="480" alt="原文封面：性能随成本增长后逐渐趋缓的曲线，标出一个成本与性能折中点">
+          <figcaption>原文封面把问题画成一条成本—性能曲线：目标不是永远追求最低单价，而是找到任务对应的有效折中点。</figcaption>
+        </figure>
+
+        <div class="source-line">
+          <span>原题：Cost effective harnesses with Fable</span>
+          <span>作者：Lance Martin</span>
+          <span>原文更新时间：2026-07-10 18:18:56 UTC</span>
+        </div>
+
+        <div class="tldr" aria-label="30 秒摘要">
+          <div><b>问题</b><p>什么时候该让 Fable 5 全程执行，什么时候只让它做 orchestrator、advisor 或 verifier？</p></div>
+          <div><b>作者的答案</b><p>按任务的“判断力分布”放置前沿模型：判断集中在开头就编排，散落在过程中就设检查点，集中在结尾就验证。</p></div>
+          <div><b>边界</b><p>委派不是免费午餐。任务太小、handoff 太多、worker 重复或 prompt cache 命中率低，混合系统可能反而更贵。</p></div>
+        </div>
+      </header>
+
+      <section id="shape">
+        <span class="section-no">01 / TASK SHAPE</span>
+        <h2>模型选择不是按任务，而是按任务里的 token</h2>
+        <p class="lead">原文最重要的抽象是 <strong>intelligence asymmetry</strong>：同一个任务内部，不同阶段、不同 token 对判断力的需求并不相同。Harness 的工作，是识别这些不对称并把前沿智能放到关键位置。</p>
+
+        <figure class="shape-figure">
+          <img src="imgs/task-shape.jpg" width="1200" height="475" loading="lazy" alt="两张任务形状图：左侧在开头需要高判断力，适合 Fable 5 orchestrator；右侧在多个中途节点需要高判断力，适合 Fable 5 advisor">
+          <figcaption>左：判断集中在任务开头，Fable 5 负责拆解与分派；右：判断散落在执行途中，便宜 executor 持续工作，Fable 5 只在关键检查点介入。</figcaption>
+        </figure>
+
+        <div class="roles">
+          <article class="role">
+            <div class="role-kicker">ORCHESTRATOR</div>
+            <h3>先做高质量分解</h3>
+            <div class="spark orchestrator" aria-label="前两步需要高判断力，后续执行需求较低"><i class="hot"></i><i class="hot"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <p>判断主要发生在开头：前沿模型制定计划、定义子任务，再把大量执行交给低成本 worker。</p>
+          </article>
+          <article class="role">
+            <div class="role-kicker">ADVISOR</div>
+            <h3>把判断力撒在途中</h3>
+            <div class="spark advisor" aria-label="执行需求较低，但第三步和第六步需要高判断力"><i></i><i></i><i class="hot"></i><i></i><i></i><i class="hot"></i><i></i><i></i></div>
+            <p>新结果不断改变下一步：executor 负责推进，前沿模型在固定或触发式 checkpoint 重新排序方向。</p>
+          </article>
+          <article class="role">
+            <div class="role-kicker">VERIFIER</div>
+            <h3>在收口处做判断</h3>
+            <div class="spark verifier" aria-label="前七步执行需求较低，最后一步需要高判断力"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="hot"></i></div>
+            <p>执行可以便宜，但最终结果需要高质量审核：用前沿模型检查完成条件、证据与错误。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="golf">
+        <span class="section-no">02 / PARAMETER GOLF</span>
+        <h2>一次好计划不够，探索任务需要反复重排方向</h2>
+        <p class="lead">Parameter Golf 要求 agent 修改训练代码、启动训练、读取结果，再决定下一次实验。目标是在 8×H100、10 分钟内，训练出能装进 16MB artifact 的最佳模型。结果会持续改变后续实验的价值，因此它天然适合 advisor，而不是一次性规划。</p>
+
+        <div class="experiment-grid">
+          <figure class="evidence-figure">
+            <img src="imgs/parameter-golf-results.jpg" width="1200" height="775" loading="lazy" alt="Parameter Golf 20 次实验的最佳验证损失曲线，Fable 5 单独执行最低，Sonnet 5 加 Fable 5 advisor 接近，Sonnet 5 单独执行最高">
+            <figcaption>纵轴是验证损失 val_bpb，越低越好。Fable 5 solo 最佳 1.1604；Sonnet 5 + Fable 5 advisor 最佳 1.1701；Sonnet 5 solo 最佳 1.2133。</figcaption>
+          </figure>
+          <div class="metric-stack" aria-label="Parameter Golf 关键结果">
+            <div class="metric"><strong>≈90%</strong><span>混合方案获得了 Fable-5-solo 改进幅度的约九成。</span></div>
+            <div class="metric blue"><strong>≈34%</strong><span>对应 token 成本约为 Fable-5-solo 的三分之一。</span></div>
+            <div class="metric dark"><strong>20</strong><span>实验轮次；Fable 5 在初始计划和两个中途 checkpoint 提供建议。</span></div>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-head"><b>判断力的分布</b><span>Fable 5：初始建议 + 2 个检查点</span></div>
+          <div class="timeline" aria-label="20 次实验中 Fable 5 在开头与两个中途检查点介入"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="timeline-labels"><span>初始计划</span><span>checkpoint 1</span><span>checkpoint 2</span></div>
+          <div class="finding">
+            <span class="finding-mark" aria-hidden="true">↻</span>
+            <p><strong>真正有用的不是开场建议。</strong>Fable 5 对初始实验的排序与最终有效方向反相关；价值来自中途 checkpoint。Sonnet 5 容易在边际收益上持续 hill-climbing，却不会主动退后一步重新排序，Fable 5 在这里负责 steering 与 reprioritization。</p>
+          </div>
+        </div>
+
+        <details>
+          <summary>实验设置与“90% 改进”的阅读口径</summary>
+          <div class="details-body"><p>原文比较三种配置：Fable 5 solo、Sonnet 5 + Fable 5 advisor、Sonnet 5 solo。文中的“约 90%”指混合方案相对 Sonnet solo 的损失下降，接近 Fable solo 相对 Sonnet solo 的损失下降；它不是准确率百分比。</p></div>
+        </details>
+      </section>
+
+      <section id="cost">
+        <span class="section-no">03 / COORDINATION COST</span>
+        <h2>便宜 worker 省下的钱，必须先偿还委派成本</h2>
+        <p class="lead">即使任务存在 intelligence asymmetry，也不代表拆出去一定划算。人有时自己做更快，模型也一样：每次 handoff 都会复制边界 token，多个 worker 还可能重复搜索；如果 prompt cache 没有延续，成本会进一步放大。</p>
+
+        <div class="cost-equation" aria-label="委派是否划算的阅读辅助公式">
+          <div class="cost-term"><b>Worker 吸收的 token × 单价差</b><span>真正可获得的执行成本套利</span></div>
+          <div class="cost-op">&gt;</div>
+          <div class="cost-term"><b>边界重复 + fan-out 重叠</b><span>brief / report 被两边重复读写，worker 之间也可能重复研究</span></div>
+          <div class="cost-op">+</div>
+          <div class="cost-term"><b>缓存损失</b><span>新 worker 重写上下文，低 cache hit rate 吃掉低单价优势</span></div>
+        </div>
+        <p class="note">这是依据原文整理的判断式，不是作者给出的正式数学公式。</p>
+
+        <figure class="evidence-figure">
+          <img src="imgs/browsecomp-results.jpg" width="1200" height="609" loading="lazy" alt="BrowseComp 两组成本与准确率散点图：200 题子集上混合编排更贵但无性能收益；完整集合上混合编排以明显低于 Fable 5 单独执行的成本取得接近的分数">
+          <figcaption>同一种 orchestrator + workers 结构，在不同任务规模上给出相反结论：小任务被协调成本吞没，大任务才有足够 token 让委派套利显现。</figcaption>
+        </figure>
+
+        <div class="comparison">
+          <article class="case easy">
+            <div class="case-kicker">BROWSECOMP200 · ≈0.37M TOKENS / PROBLEM</div>
+            <h3>小任务：混合编排反而更贵</h3>
+            <p>三种配置准确率都为 95.9%。Fable lead + Sonnet workers 每题 $1.97，而 Fable solo 仅 $1.19：多付约 60% 协调 markup，没有性能收益。</p>
+            <dl><dt>Fable 5 solo</dt><dd>95.9% · $1.19</dd><dt>混合编排</dt><dd>95.9% · $1.97</dd><dt>Sonnet 5 solo</dt><dd>95.9% · $0.62</dd></dl>
+          </article>
+          <article class="case full">
+            <div class="case-kicker">FULL SET · ≈31M TOKENS / PROBLEM</div>
+            <h3>大任务：委派开始回本</h3>
+            <p>Fable lead + Sonnet workers 达到 Fable solo 约 96% 的分数，只花约 46% 的成本。大量阅读 token 被 worker 吸收，终于覆盖固定 handoff 成本。</p>
+            <dl><dt>Fable 5 solo</dt><dd>90.8% · $40.56</dd><dt>混合编排</dt><dd>86.8% · $18.53</dd><dt>Sonnet 5 solo</dt><dd>77.8% · $16.01</dd></dl>
+          </article>
+        </div>
+      </section>
+
+      <section id="rules">
+        <span class="section-no">04 / HARNESS GUIDANCE</span>
+        <h2>写一个成本有效的 harness，先回答四个问题</h2>
+        <p class="lead">原文最后不是给出某个固定架构，而是给 Fable 5 一组元指导：让模型理解自己该在何时使用自己的 intelligence。以下四条保留了作者的顺序与边界。</p>
+
+        <div class="rules">
+          <article class="rule"><div><h3>检查任务形状</h3><p>判断力是集中在开头、散落在过程中，还是主要用于收尾审核？据此选择 orchestrator、advisor 或 verifier。</p></div><span class="rule-tag">判断力分布</span></article>
+          <article class="rule"><div><h3>提供委派先验</h3><p>给 harness 一些 worker 的能力排序或启发式，例如 taste、intelligence 与适用任务，让它不必从零猜测何时调用谁。</p></div><span class="rule-tag">模型路由</span></article>
+          <article class="rule"><div><h3>核算协调成本</h3><p>确认委派出去的 token 量足以覆盖 handoff。低 $/token 不等于低总成本，因为更强模型可能使用更少 token 完成任务。</p></div><span class="rule-tag">总成本，而非单价</span></article>
+          <article class="rule"><div><h3>保证 prompt caching</h3><p>把后续调用路由给同一个 worker，让它的 cache 持续积累。每次都生成新 worker，会反复支付上下文写入成本。</p></div><span class="rule-tag">状态连续性</span></article>
+        </div>
+      </section>
+
+      <section id="decision">
+        <span class="section-no">05 / READING TOOL</span>
+        <h2>把文章压缩成一个两问决策框架</h2>
+        <p class="lead">先问“高判断力出现在哪里”，再问“可委派 token 的体量够不够大”。第二问决定委派是否回本，第一问决定前沿模型应该以什么角色介入。</p>
+
+        <div class="decision-map" aria-label="按判断力分布和任务规模选择 harness 模式">
+          <div class="corner">判断力位置 ↓<br>委派体量 →</div>
+          <div class="axis top">体量小 / handoff 占比高</div>
+          <div class="axis top">体量大 / worker 可吸收大量 token</div>
+          <div class="axis">集中在开头或结尾</div>
+          <div class="cell direct"><b>直接用强模型</b><p>别为了架构而拆分；小任务往往不够偿还协调成本。</p></div>
+          <div class="cell"><b>Orchestrator / Verifier</b><p>强模型做分解或验收，低成本 worker 承担大段执行。</p></div>
+          <div class="axis">散落在执行途中</div>
+          <div class="cell direct"><b>少量直接执行</b><p>如果执行体量不大，checkpoint 本身也可能成为额外负担。</p></div>
+          <div class="cell advisor"><b>Advisor checkpoints</b><p>便宜 executor 推进，强模型周期性退后一步重新排序方向。</p></div>
+        </div>
+        <p class="note">这是为阅读与应用整理的二维框架，不是原文中的完整策略表。实际系统还需考虑 worker 能力、错误风险、并行重叠和缓存实现。</p>
+      </section>
+
+      <section class="closing" id="takeaway">
+        <span class="section-no">06 / TAKEAWAY</span>
+        <h2>成本优化的对象不是模型单价，而是判断力的布置</h2>
+        <p class="lead">这篇文章真正反对的是一种粗糙的 routing 直觉：贵模型只做计划、便宜模型只做执行。Parameter Golf 说明判断可能需要散落在过程中；BrowseComp 说明任务规模必须大到足以摊薄协调成本。</p>
+        <p class="closing-quote">好的 harness 不是尽量少用前沿模型，而是让每一次前沿智能的介入，都落在最能改变任务走向的位置。</p>
+        <p class="lead" style="margin-top:1.4rem">原文最后再向前走了一步：Claude 可以依据任务即时写出自己的 harness。前面的任务形状、委派先验、协调成本与缓存规则，就是让这种动态编排不只“能工作”，还更可能在总成本上成立。</p>
+
+        <footer>
+          <div class="footer-grid">
+            <p><strong>原文</strong><br>Lance Martin, “Cost effective harnesses with Fable”, X Article, 2026-07-10。<a href="https://x.com/RLanceMartin/status/2075641284635799865" target="_blank" rel="noopener noreferrer">打开原文 ↗</a></p>
+            <p><strong>实际数据源</strong><br>内容依据 X Article 完整 blocks（通过 FxTwitter 公共 API 获取）及 pbs.twimg.com 原始配图整理；原始 JSON 已保存在本篇 <code>source/article.json</code>，未使用搜索摘要补正文事实。</p>
+          </div>
+          <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh"><span class="production-label">制作信息</span><span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span><span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span></p>
+        </footer>
+      </section>
+    </main>
+
+    <aside class="toc" aria-label="文章目录">
+      <div class="toc-label">阅读路径</div>
+      <a href="#shape">任务形状</a>
+      <a href="#golf">Parameter Golf</a>
+      <a href="#cost">协调成本</a>
+      <a href="#rules">四条规则</a>
+      <a href="#decision">决策框架</a>
+      <a href="#takeaway">结论</a>
+      <div class="legend" aria-label="图表颜色图例"><span><i class="fable"></i>Fable 5</span><span><i class="sonnet"></i>Sonnet 5</span><span><i class="base"></i>baseline</span></div>
+    </aside>
+  </div>
+
+  <script>
+    const tocLinks = [...document.querySelectorAll('.toc a[href^="#"]')];
+    const sections = tocLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      tocLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === '#' + visible.target.id));
+    }, { rootMargin: '-18% 0px -62% 0px', threshold: [0, .15, .45] });
+    sections.forEach(section => observer.observe(section));
+  </script>
+</body>
+</html>

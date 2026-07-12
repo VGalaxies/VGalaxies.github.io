@@ -8,6 +8,16 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: cost-effective-harnesses-with-fable
+    title: 'Fable 5 怎么把判断力放在关键节点'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Model Routing'
+      - 'Cost Optimization'
+      - 'Multi-Agent Systems'
+    source_url: 'https://x.com/RLanceMartin/status/2075641284635799865'
   - slug: neural-architecture-as-lagrangian-constraints
     title: '为什么神经网络能容纳这么多架构'
     date: 2026-07-13
