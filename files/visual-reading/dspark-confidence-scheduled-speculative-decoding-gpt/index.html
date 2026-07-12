@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSpark：先把草稿写顺，再决定哪些值得验证</title>
+  <meta name="description" content="DSpark 论文中文可视化阅读：半自回归草稿生成、置信度校准、硬件感知前缀调度，以及 DeepSeek-V4 线上部署结果。">
+  <meta name="visual-reading-tags" content="Speculative Decoding, LLM Serving, Parallel Generation, Systems Optimization">
+  <style>
+    :root {
+      --paper: oklch(0.974 0.008 92);
+      --paper-2: oklch(0.945 0.012 92);
+      --paper-3: oklch(0.91 0.018 92);
+      --ink: oklch(0.23 0.018 238);
+      --muted: oklch(0.49 0.022 238);
+      --line: oklch(0.83 0.018 92);
+      --blue: oklch(0.42 0.105 238);
+      --blue-soft: oklch(0.91 0.038 238);
+      --green: oklch(0.45 0.09 160);
+      --green-soft: oklch(0.92 0.045 160);
+      --amber: oklch(0.59 0.13 68);
+      --amber-soft: oklch(0.93 0.055 78);
+      --red: oklch(0.51 0.13 29);
+      --shadow: 0 18px 55px rgba(27, 39, 47, .08);
+      --r-sm: 6px;
+      --r-md: 12px;
+      --r-lg: 20px;
+      --measure: 68ch;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.82;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: .18em; }
+    img { max-width: 100%; }
+    button, summary, a { touch-action: manipulation; }
+    :focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+    .skip-link {
+      position: fixed; z-index: 100; left: 1rem; top: .75rem;
+      transform: translateY(-160%); padding: .65rem .85rem;
+      color: var(--paper); background: var(--ink); border-radius: var(--r-sm);
+      transition: transform .18s ease-out;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .topline {
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in oklch, var(--paper) 94%, transparent);
+    }
+    .topline-inner {
+      max-width: 1240px; margin: 0 auto; padding: .75rem 1.25rem;
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      font-size: .82rem; color: var(--muted);
+    }
+    .topline strong { color: var(--ink); letter-spacing: .02em; }
+    .topline nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .topline a { color: var(--muted); text-decoration: none; min-height: 40px; display: inline-flex; align-items: center; }
+    .topline a:hover { color: var(--blue); }
+
+    .hero {
+      max-width: 1240px; margin: 0 auto; padding: clamp(3.4rem, 8vw, 7.6rem) 1.25rem 4.5rem;
+      display: grid; grid-template-columns: minmax(0, .92fr) minmax(420px, 1.08fr); gap: clamp(2rem, 6vw, 5.5rem); align-items: center;
+    }
+    .eyebrow { display: flex; align-items: center; gap: .65rem; color: var(--blue); font-weight: 720; font-size: .82rem; letter-spacing: .09em; }
+    .eyebrow::before { content: ""; width: 26px; height: 2px; background: var(--blue); }
+    h1, h2, h3, .display-serif {
+      font-family: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, serif;
+      text-wrap: balance;
+    }
+    h1 { margin: 1rem 0 1.25rem; font-size: clamp(2.55rem, 5.8vw, 5.4rem); line-height: 1.04; font-weight: 700; }
+    h1 .line { display: block; }
+    h1 .accent { color: var(--blue); }
+    .hero-deck { max-width: 38rem; margin: 0; font-size: clamp(1.05rem, 1.6vw, 1.22rem); color: var(--muted); text-wrap: pretty; }
+    .meta { display: flex; flex-wrap: wrap; gap: .55rem 1.1rem; margin-top: 1.55rem; font-size: .84rem; color: var(--muted); }
+    .meta span { display: inline-flex; gap: .35rem; align-items: center; }
+    .meta span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .hero-links { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.75rem; }
+    .button-link {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: .55rem .9rem;
+      border-radius: var(--r-sm); text-decoration: none; font-weight: 680; font-size: .9rem;
+      transition: transform .16s ease-out, background-color .16s ease-out;
+    }
+    .button-link.primary { color: var(--paper); background: var(--blue); }
+    .button-link.secondary { color: var(--ink); background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--line); }
+    .button-link:active { transform: scale(.97); }
+
+    .cycle {
+      position: relative; padding: clamp(1.1rem, 3vw, 2rem); border-radius: var(--r-lg);
+      background: var(--ink); color: oklch(0.94 0.01 238); box-shadow: var(--shadow); overflow: hidden;
+    }
+    .cycle::after { content: ""; position: absolute; inset: auto -8% -24% auto; width: 270px; height: 270px; border-radius: 50%; background: color-mix(in oklch, var(--green) 22%, transparent); filter: blur(2px); }
+    .cycle > * { position: relative; z-index: 1; }
+    .cycle-label { color: oklch(0.73 0.06 238); font-size: .72rem; letter-spacing: .11em; font-weight: 750; }
+    .tokens { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin: 1.35rem 0; }
+    .token { width: 42px; height: 42px; display: grid; place-items: center; border-radius: var(--r-sm); font: 720 1rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .token.context { color: var(--ink); background: var(--amber-soft); }
+    .token.draft { color: var(--ink); background: var(--blue-soft); }
+    .token.keep { color: var(--ink); background: var(--green-soft); box-shadow: inset 0 -4px 0 var(--green); }
+    .token.drop { color: oklch(0.82 0.04 29); background: color-mix(in oklch, var(--red) 28%, var(--ink)); text-decoration: line-through; opacity: .72; }
+    .token.correct { color: var(--ink); background: var(--amber-soft); box-shadow: inset 0 -4px 0 var(--amber); }
+    .arrow { color: oklch(0.68 0.02 238); font-weight: 800; }
+    .stage { padding: .9rem 0; border-top: 1px solid rgba(255,255,255,.1); }
+    .stage:first-of-type { border-top: 0; }
+    .stage-k { display: inline-block; width: 1.6rem; color: oklch(0.75 0.08 160); font: 720 .82rem ui-monospace, monospace; }
+    .stage strong { color: oklch(0.96 0.01 238); }
+    .stage p { margin: .25rem 0 0 1.65rem; color: oklch(0.74 0.02 238); font-size: .87rem; }
+    .confidence-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: .45rem; margin: .75rem 0 0 1.65rem; }
+    .confidence { padding: .5rem .35rem; border-radius: var(--r-sm); background: rgba(255,255,255,.06); text-align: center; font: 650 .78rem ui-monospace, monospace; }
+    .confidence.low { color: oklch(0.8 0.09 55); background: rgba(197, 101, 57, .16); }
+
+    .layout { max-width: 1240px; margin: 0 auto; padding: 0 1.25rem 6rem; display: grid; grid-template-columns: minmax(0, 830px) 220px; gap: clamp(2rem, 6vw, 5.5rem); align-items: start; }
+    article { min-width: 0; }
+    .toc { position: sticky; top: 1.5rem; padding-top: 1rem; font-size: .82rem; color: var(--muted); }
+    .toc-title { color: var(--ink); font-weight: 740; margin-bottom: .6rem; }
+    .toc a { display: block; color: var(--muted); text-decoration: none; padding: .28rem 0 .28rem .75rem; border-left: 1px solid var(--line); }
+    .toc a:hover { color: var(--blue); border-left-color: var(--blue); }
+    section { margin: 0 0 clamp(5rem, 10vw, 8.5rem); scroll-margin-top: 2rem; }
+    .section-no { color: var(--blue); font: 760 .76rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; }
+    h2 { margin: .55rem 0 1.25rem; font-size: clamp(2rem, 4vw, 3.35rem); line-height: 1.13; }
+    h3 { margin: 2.5rem 0 .85rem; font-size: clamp(1.3rem, 2.2vw, 1.65rem); line-height: 1.3; }
+    h4 { margin: 1.4rem 0 .5rem; font-size: 1rem; }
+    p { max-width: var(--measure); text-wrap: pretty; }
+    .lead { font-size: 1.1rem; color: color-mix(in oklch, var(--ink) 80%, var(--muted)); }
+    .lede-line { display: block; width: 78px; height: 4px; background: var(--blue); margin: 1.45rem 0; }
+    .tldr {
+      display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 1.25rem;
+      padding: clamp(1.2rem, 3vw, 2rem); background: var(--paper-2); border-radius: var(--r-lg);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+    .tldr p { margin: 0; }
+    .tldr ul { margin: 0; padding-left: 1.2rem; }
+    .tldr li { margin: .35rem 0; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); margin: 1.3rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .metric { background: var(--paper); padding: 1.15rem .9rem; }
+    .metric b { display: block; color: var(--blue); font: 760 clamp(1.6rem, 4vw, 2.4rem)/1 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+    .metric span { display: block; margin-top: .55rem; color: var(--muted); font-size: .8rem; line-height: 1.45; }
+    .equation {
+      max-width: var(--measure); padding: 1rem 1.1rem; margin: 1.35rem 0;
+      background: var(--ink); color: oklch(0.92 0.02 238); border-radius: var(--r-md);
+      font: 580 clamp(.9rem, 2vw, 1.08rem)/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-x: auto; font-variant-numeric: tabular-nums;
+    }
+    .equation em { color: oklch(0.79 0.1 160); font-style: normal; }
+    .lever-strip { display: grid; grid-template-columns: repeat(3, 1fr); margin: 1.5rem 0; border-top: 1px solid var(--line); }
+    .lever { padding: 1rem 1rem 0 0; }
+    .lever + .lever { padding-left: 1rem; border-left: 1px solid var(--line); }
+    .lever code { color: var(--blue); font-size: .82rem; }
+    .lever b { display: block; margin-top: .25rem; }
+    .lever p { color: var(--muted); font-size: .87rem; margin: .35rem 0; }
+    .compare { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: .65rem; align-items: stretch; margin: 1.6rem 0; }
+    .compare-item { padding: 1rem; background: var(--paper-2); border-radius: var(--r-md); }
+    .compare-item.dspark { background: var(--blue-soft); box-shadow: inset 0 -4px 0 var(--blue); }
+    .compare-item b { display: block; }
+    .compare-item p { margin: .45rem 0 0; color: var(--muted); font-size: .86rem; }
+    .compare-arrow { align-self: center; color: var(--blue); font-weight: 800; }
+    .callout { max-width: var(--measure); margin: 1.6rem 0; padding: 1rem 1.1rem; background: var(--amber-soft); border-radius: var(--r-md); }
+    .callout strong { color: color-mix(in oklch, var(--amber) 78%, var(--ink)); }
+    .callout p { margin: .25rem 0 0; }
+    .callout.green { background: var(--green-soft); }
+    .callout.green strong { color: var(--green); }
+    .example {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.25rem 0;
+    }
+    .phrase { padding: 1rem; border-radius: var(--r-md); background: var(--paper-2); }
+    .phrase.bad { background: var(--amber-soft); }
+    .phrase .en { font: 720 1.05rem ui-monospace, monospace; }
+    .phrase .note { color: var(--muted); font-size: .84rem; margin-top: .35rem; }
+    .process { margin: 1.35rem 0; counter-reset: step; }
+    .process-step { display: grid; grid-template-columns: 38px 1fr; gap: .8rem; padding: .85rem 0; border-top: 1px solid var(--line); }
+    .process-step::before { counter-increment: step; content: counter(step, decimal-leading-zero); color: var(--blue); font: 740 .8rem ui-monospace, monospace; padding-top: .16rem; }
+    .process-step b { display: block; }
+    .process-step p { margin: .2rem 0 0; color: var(--muted); font-size: .91rem; }
+    figure { margin: 2rem 0; }
+    .figure-shell { background: white; padding: clamp(.7rem, 2vw, 1.15rem); border-radius: var(--r-md); box-shadow: 0 8px 30px rgba(29, 42, 48, .07); }
+    .figure-shell img { display: block; width: 100%; height: auto; outline: 1px solid rgba(10, 25, 32, .1); outline-offset: -1px; }
+    figcaption { max-width: var(--measure); margin-top: .75rem; color: var(--muted); font-size: .84rem; }
+    figcaption b { color: var(--ink); }
+    details { max-width: var(--measure); margin: 1rem 0; background: var(--paper-2); border-radius: var(--r-md); }
+    summary { min-height: 44px; display: flex; align-items: center; gap: .6rem; padding: .72rem 1rem; cursor: pointer; font-weight: 680; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; color: var(--blue); font: 800 1.1rem ui-monospace, monospace; }
+    details[open] summary::before { content: "−"; }
+    .details-body { padding: 0 1rem 1rem; }
+    .details-body p:first-child { margin-top: .15rem; }
+    pre { padding: 1rem; border-radius: var(--r-sm); background: var(--ink); color: oklch(0.9 0.02 238); overflow-x: auto; font: .78rem/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .table-wrap { overflow-x: auto; margin: 1.3rem 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 630px; font-size: .87rem; font-variant-numeric: tabular-nums; }
+    th, td { padding: .72rem .8rem; border-bottom: 1px solid var(--line); }
+    th { text-align: left; color: var(--muted); font-size: .74rem; letter-spacing: .04em; }
+    td:not(:first-child), th:not(:first-child) { text-align: right; }
+    td.best { color: var(--green); font-weight: 760; }
+    .signal-chain { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1.2rem 0; }
+    .signal { min-width: 92px; padding: .7rem .8rem; background: var(--blue-soft); border-radius: var(--r-sm); text-align: center; }
+    .signal b { display: block; font: 720 .92rem ui-monospace, monospace; }
+    .signal small { color: var(--muted); }
+    .signal.cumulative { background: var(--green-soft); }
+    .scheduler-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.35rem 0; }
+    .scheduler-panel { padding: 1rem; background: var(--paper-2); border-radius: var(--r-md); }
+    .scheduler-panel h4 { margin-top: 0; }
+    .rank-row { display: grid; grid-template-columns: 44px 1fr auto; gap: .6rem; align-items: center; padding: .45rem 0; border-top: 1px solid var(--line); }
+    .rank-row:first-of-type { border-top: 0; }
+    .rank-row .bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+    .rank-row .bar span { display: block; height: 100%; background: var(--green); }
+    .rank-row code { font-size: .75rem; }
+    .rank-row .score { font: 700 .78rem ui-monospace, monospace; }
+    .evidence-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .evidence-pair figure { margin: 1rem 0; }
+    .boundary { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 1.4rem; }
+    .boundary > div { background: var(--paper); padding: 1rem; }
+    .boundary b { display: block; color: var(--blue); }
+    .boundary p { margin: .35rem 0 0; color: var(--muted); font-size: .9rem; }
+
+    footer { background: var(--ink); color: oklch(0.76 0.018 238); }
+    .footer-inner { max-width: 1240px; margin: 0 auto; padding: 3rem 1.25rem; }
+    .footer-inner p { max-width: 82ch; }
+    .footer-inner strong { color: oklch(0.94 0.01 238); }
+    .footer-inner a { color: oklch(0.78 0.09 210); }
+    .production-meta { --production-surface: rgba(255,255,255,.07); --production-ink: oklch(0.94 0.01 238); --production-muted: oklch(0.7 0.018 238); --production-line: rgba(255,255,255,.16); display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 1.2rem 0 0; }
+    .production-label { margin-right: .1rem; color: var(--production-muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+    .production-chip { display: inline-flex; align-items: baseline; gap: .38rem; padding: .22rem .58rem; background: var(--production-surface); border-radius: 999px; line-height: 1.35; }
+    .production-key { color: var(--production-muted); font-size: .68rem; letter-spacing: .04em; }
+    .production-value { color: var(--production-ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; font-weight: 650; }
+
+    @media (hover:hover) {
+      .button-link:hover { transform: translateY(-2px); text-decoration: none; }
+      summary:hover { color: var(--blue); }
+    }
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; }
+      .cycle { max-width: 720px; }
+      .layout { grid-template-columns: 1fr; }
+      .toc { display: none; }
+    }
+    @media (max-width: 720px) {
+      .topline nav a:not(.source) { display: none; }
+      .hero { padding-top: 3.2rem; }
+      .tldr, .scheduler-grid, .evidence-pair, .example, .boundary { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr; }
+      .lever-strip { grid-template-columns: 1fr; }
+      .lever, .lever + .lever { padding: .9rem 0; border-left: 0; border-top: 1px solid var(--line); }
+      .compare { grid-template-columns: 1fr; }
+      .compare-arrow { transform: rotate(90deg); justify-self: center; }
+      h1 { font-size: clamp(2.45rem, 14vw, 4rem); }
+      .confidence-row { grid-template-columns: repeat(2, 1fr); }
+      .hero-links { align-items: flex-start; flex-direction: column; }
+      .button-link { width: auto; }
+    }
+    @media (max-width: 390px) {
+      body { font-size: 15px; }
+      .hero, .layout, .topline-inner, .footer-inner { padding-left: 1rem; padding-right: 1rem; }
+      .cycle { margin-left: -.25rem; margin-right: -.25rem; }
+      .token { width: 38px; height: 38px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+    @media print {
+      .topline, .toc, .hero-links, .skip-link { display: none; }
+      body { background: white; }
+      .hero, .layout { display: block; max-width: 100%; }
+      .cycle { break-inside: avoid; }
+      details > .details-body { display: block !important; }
+      details { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到正文</a>
+  <div class="topline">
+    <div class="topline-inner">
+      <strong>VGalaxies Visual Reading · Paper 2607.05147v1</strong>
+      <nav aria-label="页内导航">
+        <a href="#problem">问题</a>
+        <a href="#architecture">架构</a>
+        <a href="#scheduler">调度</a>
+        <a href="#evidence">证据</a>
+        <a class="source" href="https://arxiv.org/abs/2607.05147v1" target="_blank" rel="noopener">阅读原文 ↗</a>
+      </nav>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div>
+      <div class="eyebrow">DeepSeek 推理系统 · 投机解码</div>
+      <h1><span class="line">先把草稿</span><span class="line accent">写顺</span><span class="line">再决定哪些值得验证</span></h1>
+      <p class="hero-deck">DSpark 把“并行草稿写得快，但后缀容易写歪”和“高并发时验证太多，反而挤占吞吐”看成同一个系统问题。它用少量顺序计算修正草稿，再用校准后的置信度与硬件容量曲线动态分配验证预算。</p>
+      <div class="meta">
+        <span>Xin Cheng、Xingkai Yu、Chenze Shao 等</span>
+        <span>Peking University · DeepSeek-AI</span>
+        <span>arXiv v1</span>
+      </div>
+      <div class="hero-links">
+        <a class="button-link primary" href="https://arxiv.org/pdf/2607.05147v1" target="_blank" rel="noopener">打开论文 PDF</a>
+        <a class="button-link secondary" href="#tldr">先看 30 秒结论</a>
+      </div>
+    </div>
+
+    <div class="cycle" aria-label="DSpark 一轮解码的流程示意">
+      <div class="cycle-label">ONE DSpark DECODING CYCLE</div>
+      <div class="stage">
+        <span class="stage-k">01</span><strong>Target 先生成锚点 D</strong>
+        <div class="tokens" aria-label="上下文 ABC 生成锚点 D">
+          <span class="token context">A</span><span class="token context">B</span><span class="token context">C</span><span class="arrow">→</span><span class="token context">D</span>
+        </div>
+      </div>
+      <div class="stage">
+        <span class="stage-k">02</span><strong>并行 backbone 给底稿，顺序 head 把 EFGH 写顺</strong>
+        <div class="tokens"><span class="token draft">E</span><span class="token draft">F</span><span class="token draft">G</span><span class="token draft">H</span></div>
+        <div class="confidence-row" aria-label="四个草稿位置的置信度">
+          <div class="confidence">c₁</div><div class="confidence">c₂</div><div class="confidence">c₃</div><div class="confidence low">c₄ ↓</div>
+        </div>
+      </div>
+      <div class="stage">
+        <span class="stage-k">03</span><strong>调度器保留 EFG，丢掉低价值后缀 H</strong>
+        <div class="tokens"><span class="token keep">E</span><span class="token keep">F</span><span class="token keep">G</span><span class="token drop">H</span></div>
+      </div>
+      <div class="stage">
+        <span class="stage-k">04</span><strong>Target 并行验证，接受 EF，在 G 处纠正为 G*</strong>
+        <div class="tokens"><span class="token keep">E</span><span class="token keep">F</span><span class="token drop">G</span><span class="arrow">→</span><span class="token correct">G*</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main id="main-content">
+      <article>
+        <section id="tldr">
+          <div class="section-no">00 · TL;DR</div>
+          <h2>它同时优化“猜什么”和“验多少”</h2>
+          <div class="tldr">
+            <p><strong>核心答案：</strong>DSpark 用“重并行 backbone + 轻顺序 head”保住并行 drafter 的速度，同时缓解后缀接受率衰减；再用置信度 head 预测每个前缀活下来的概率，把这些概率与当前推理引擎的 <code>SPS(B)</code> 容量曲线结合，选择全局吞吐最高的验证长度。</p>
+            <ul>
+              <li>离线看 draft 质量，Qwen3-4B/8B/14B 上宏平均接受长度相对 Eagle3 提升 30.9% / 26.7% / 30.0%。</li>
+              <li>线上看系统结果，匹配吞吐时，V4-Flash / V4-Pro 单用户生成速度提升 60%-85% / 57%-78%。</li>
+              <li>边界：低接受率复杂请求仍要支付固定的并行 draft 成本。</li>
+            </ul>
+          </div>
+          <div class="metrics" aria-label="论文关键结果">
+            <div class="metric"><b>16.3-18.4%</b><span>相对并行 drafter DFlash 的宏平均接受长度提升，Qwen3 三个规模</span></div>
+            <div class="metric"><b>60-85%</b><span>V4-Flash 在匹配实际吞吐水平下的单用户速度提升</span></div>
+            <div class="metric"><b>≈1%</b><span>STS 校准后的平均 ECE，原始估计为 3%-8%</span></div>
+          </div>
+        </section>
+
+        <section id="problem">
+          <div class="section-no">01 · WHY</div>
+          <h2>投机解码真正要平衡的，是三笔账</h2>
+          <span class="lede-line" aria-hidden="true"></span>
+          <p class="lead">一次投机解码先由小 drafter 猜一段 token，再让 target 模型一次并行验证。第一处拒绝会让后面所有草稿作废，因此速度不只由“猜得准不准”决定。</p>
+          <div class="equation" aria-label="每个生成 token 的平均延迟公式">L = (T<sub>draft</sub> + T<sub>verify</sub>) / <em>τ</em></div>
+          <div class="lever-strip">
+            <div class="lever"><code>↓ T_draft</code><b>草稿要快</b><p>并行 drafter 一次 forward 生成整块，长度增加时 draft 延迟几乎不变。</p></div>
+            <div class="lever"><code>↑ τ</code><b>草稿要顺</b><p>接受长度越长，一次 target forward 摊到的真实 token 越多。</p></div>
+            <div class="lever"><code>↓ T_verify</code><b>验证要克制</b><p>高并发时，每个大概率被拒的后缀 token 都在挤占稀缺 batch 容量。</p></div>
+          </div>
+
+          <h3>两类 drafter 各自只做好一半</h3>
+          <div class="compare" aria-label="三种 drafter 架构对比">
+            <div class="compare-item"><b>自回归 drafter</b><p>每一步都条件于前面已采样 token，序列一致性强；但成本随草稿长度 γ 线性增长，只能用浅模型和短块。</p></div>
+            <div class="compare-arrow">→</div>
+            <div class="compare-item"><b>并行 drafter</b><p>一次 forward 生成所有位置，可用更深模型和更长块；但位置彼此独立，后缀容易发生 multi-modal collision。</p></div>
+            <div class="compare-arrow">→</div>
+            <div class="compare-item dspark"><b>DSpark</b><p>重计算保持并行，只给输出端加一个很轻的顺序模块；再把验证长度从固定常数改成负载感知决策。</p></div>
+          </div>
+
+          <h3>一个很小但关键的失败例子</h3>
+          <p>上下文可能同时允许两条合理续写：<span lang="en">“of course”</span> 与 <span lang="en">“no problem”</span>。并行预测的两个位置各自对所有可能前缀做边缘化，可能拼出语法上不一致的组合。</p>
+          <div class="example">
+            <div class="phrase"><div class="en" lang="en">of course · no problem</div><div class="note">两条各自一致的模式</div></div>
+            <div class="phrase bad"><div class="en" lang="en">of problem · no course</div><div class="note">独立位置混合了不同模式</div></div>
+          </div>
+          <div class="callout"><strong>论文的关键观察</strong><p>并行模型的第一个草稿 token 反而常常强于浅层自回归 drafter，因为它能用更深的网络；问题集中在后续位置。最划算的修复不是放弃并行，而是只补回少量局部序列依赖。</p></div>
+        </section>
+
+        <section id="architecture">
+          <div class="section-no">02 · GENERATE BETTER</div>
+          <h2>半自回归：重活并行做，顺序只负责“别写歪”</h2>
+          <p class="lead">DSpark 的 parallel backbone 一次产生整块隐藏状态与基础 logits，sequential head 再从左到右采样，为每个位置加一个依赖已采样前缀的 transition bias。</p>
+          <figure>
+            <div class="figure-shell"><img src="imgs/figure-1-architecture.jpg" width="1133" height="718" alt="DSpark 架构：target 生成锚点，parallel block 生成基础 logits，sequential block 生成草稿与置信度，scheduler 截断后由 target 验证"></div>
+            <figcaption><b>图 1 · DSpark 完整解码周期。</b>重并行 block 负责主要 draft 计算，轻顺序 block 注入块内依赖；confidence scheduler 在 target 验证前先删掉低价值后缀。图像来自同一份 v1 PDF 的 GLM-OCR 裁剪。</figcaption>
+          </figure>
+
+          <div class="process">
+            <div class="process-step"><div><b>并行阶段：生成 γ 个位置的基础分布</b><p>DSpark 以 DFlash 为 backbone，并把 anchor 本身作为第一个预测位置，减少一次 mask 位置的计算。</p></div></div>
+            <div class="process-step"><div><b>顺序阶段：对基础 logits 加 transition bias</b><p>最终分布仍是逐位置 softmax，可直接用于标准 rejection sampling，不需要全局归一化。</p></div></div>
+            <div class="process-step"><div><b>默认 Markov head：只看前一个已采样 token</b><p>完整词表转移矩阵用秩 256 的低秩分解近似，计算与存储成本都较小。</p></div></div>
+          </div>
+          <div class="equation">p<sub>k</sub>(v | x<sub>0</sub>, x<sub>&lt;k</sub>) = softmax( U<sub>k</sub>(v) + B<sub>k</sub>(x<sub>0</sub>, x<sub>&lt;k</sub>, v) )</div>
+          <p>直觉上，parallel backbone 先说“第二个位置可能是 <span lang="en">course</span> 或 <span lang="en">problem</span>”；当第一个位置真的采样出 <span lang="en">of</span> 后，Markov head 提升 <span lang="en">course</span>、压低 <span lang="en">problem</span>。它不重做语义理解，只解决局部接续。</p>
+
+          <details>
+            <summary>RNN head 与默认 Markov head 有什么差别</summary>
+            <div class="details-body"><p>Markov head 只访问前一个 token。RNN head 维护块内 recurrent state，把更长的前缀历史与 backbone hidden 一起送入门控更新。实验显示 RNN 主要在更长 proposal 上带来小幅额外收益，但实现与部署更复杂，所以论文默认使用 Markov head。</p></div>
+          </details>
+          <details>
+            <summary>训练目标：为什么既有 CE，又有 TV 与 confidence loss</summary>
+            <div class="details-body">
+              <p>target 模型与共享的 embedding / LM head 冻结，只训练 draft backbone、sequential block 与 confidence head。三个损失都用位置权重 <code>w_k = exp(-(k-1)/γ)</code>，强调更靠前、对前缀生存影响更大的位置。</p>
+              <ul><li><code>L_ce</code>：预测真实 next token。</li><li><code>L_tv</code>：缩小 draft 与 target 分布的 total variation distance，直接提高理论接受率。</li><li><code>L_conf</code>：让 confidence head 预测每一步的软接受标签。</li></ul>
+              <pre>L = 0.1 · L_ce + 0.9 · L_tv + 1.0 · L_conf</pre>
+            </div>
+          </details>
+        </section>
+
+        <section id="scheduler">
+          <div class="section-no">03 · VERIFY SMARTER</div>
+          <h2>不是置信度高就全验，而是算“这一个 token 值不值得占 batch”</h2>
+          <p class="lead">confidence head 给出的 <code>c_k</code> 不是“这个 token 看起来像不像”，而是“前面都接受的条件下，第 k 个 token 也能通过 target 验证的概率”。因此一个前缀真正存活到第 j 位的概率是累计乘积。</p>
+          <div class="signal-chain" aria-label="条件接受率转成累计生存概率">
+            <div class="signal"><b>c₁</b><small>第 1 位条件接受率</small></div><span class="arrow">×</span>
+            <div class="signal"><b>c₂</b><small>第 2 位条件接受率</small></div><span class="arrow">×</span>
+            <div class="signal"><b>c₃</b><small>第 3 位条件接受率</small></div><span class="arrow">=</span>
+            <div class="signal cumulative"><b>a₃</b><small>前三位全活下来的概率</small></div>
+          </div>
+          <div class="equation">a<sub>r,j</sub> = ∏<sub>i≤j</sub> c<sub>r,i</sub> &nbsp;&nbsp; · &nbsp;&nbsp; Θ = τ · SPS(B)</div>
+          <p>对 R 个活跃请求，若每个请求选择验证长度 <code>ℓ_r</code>，target 一步真正接收的 token batch 是 <code>B = Σ(1+ℓ_r)</code>，期望产出是 <code>τ = Σ(1+Σa_r,j)</code>。<code>SPS(B)</code> 是引擎初始化时 profile 一次得到的“这个 batch 大小时每秒能跑几步”。目标不是让单个请求最长，而是最大化全系统 token throughput <code>Θ</code>。</p>
+
+          <div class="scheduler-grid">
+            <div class="scheduler-panel">
+              <h4>全局候选池</h4>
+              <p class="muted">解释性示意：所有请求的前缀 extension 按累计生存概率排序。</p>
+              <div class="rank-row"><code>r2·j1</code><div class="bar"><span style="width:92%"></span></div><span class="score">0.92</span></div>
+              <div class="rank-row"><code>r1·j1</code><div class="bar"><span style="width:88%"></span></div><span class="score">0.88</span></div>
+              <div class="rank-row"><code>r2·j2</code><div class="bar"><span style="width:77%"></span></div><span class="score">0.77</span></div>
+              <div class="rank-row"><code>r3·j1</code><div class="bar"><span style="width:69%"></span></div><span class="score">0.69</span></div>
+              <div class="rank-row"><code>r1·j2</code><div class="bar"><span style="width:55%"></span></div><span class="score">0.55</span></div>
+            </div>
+            <div class="scheduler-panel">
+              <h4>硬件容量决定截断点</h4>
+              <p>每加入一个候选，<code>τ</code> 增加，但 <code>B</code> 也变大，<code>SPS(B)</code> 可能下降。</p>
+              <ul><li><strong>轻负载：</strong>额外验证接近免费，可保留更长前缀。</li><li><strong>重负载：</strong>低生存率 token 会挤占关键容量，应更早截断。</li><li><strong>跨请求分配：</strong>预算优先给全局最可能存活的 extension，不要求每个请求等长。</li></ul>
+            </div>
+          </div>
+
+          <h3>为什么一定要校准</h3>
+          <p>排序只需要“谁更可靠”，而吞吐计算需要概率的绝对数值。原始 confidence 虽有 0.81-0.90 的 ROC-AUC，但整体过度自信，ECE 为 3%-8%。Sequential Temperature Scaling 从左到右校准累计前缀概率，把平均 ECE 降到约 1%，又不改变原来的排序。</p>
+
+          <h3>early stop 不只是提速技巧，它是无损性的因果边界</h3>
+          <div class="callout green"><strong>Non-anticipating property</strong><p>是否把第 k 个草稿 token 纳入验证，必须在看到这个 token 的具体实现之前决定。因为 Markov confidence 会用前一个已采样 token，若回头做全局搜索，未来 continuation 的置信度可能反过来影响更早 token 是否入选，造成 selection bias。</p></div>
+          <details>
+            <summary>Algorithm 1：Hardware-Aware Prefix Scheduler</summary>
+            <div class="details-body">
+              <pre>输入: R 个请求的 confidence 序列；引擎容量表 SPS(B)
+
+1. 对每个请求计算累计生存概率 a[r,j] = ∏ c[r,i]
+2. 把全部 (request, position) 按 a[r,j] 从高到低排序
+3. 初始每个请求只验证 anchor，B = R，τ = R
+4. 沿排序依次加入一个 prefix extension:
+     B ← B + 1
+     τ ← τ + a[r,j]
+     Θ ← τ · SPS(B)
+5. 若 Θ 创新高，保存当前每请求长度；否则立即停止
+6. 返回吞吐最高且满足因果约束的 prefix lengths</pre>
+              <p>累计概率随位置单调不增，因此全局排序天然遵守每个请求内部的前缀顺序。论文指出，early stop 在吞吐目标单峰时得到全局最大值。</p>
+            </div>
+          </details>
+          <details>
+            <summary>附录反例：去掉 early stop，输出如何从目标分布偏掉</summary>
+            <div class="details-body">
+              <p>附录构造单请求、最大草稿长度 2 的例子。若第一个草稿 token 为 A，后继 confidence 高，回溯搜索选择长度 2；若为 B，后继 confidence 低，搜索选择长度 0。于是“第一个 token 是否被纳入验证”依赖于它自己的取值。</p>
+              <p>目标分布是 <code>(A: 0.7, B: 0.3)</code>，draft 分布是 <code>(0.5, 0.5)</code>。这种回溯决策最后产生 <code>(A: 0.85, B: 0.15)</code>，不再等于 target。early stop 在 throughput 第一次下降时就停下，不读取 continuation-dependent 的未来量，从而恢复无损性。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="evidence">
+          <div class="section-no">04 · OFFLINE EVIDENCE</div>
+          <h2>离线实验先隔离“草稿质量”，再解释质量来自哪里</h2>
+          <p class="lead">为了不把调度收益混进 drafter 对比，离线主实验关闭 confidence scheduler，所有方法固定提出同样长度的 chain。评测目标是每轮平均接受长度 <code>τ</code>，覆盖数学、代码与日常对话九个 benchmark。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Target</th><th>相对 Eagle3 宏平均提升</th><th>相对 DFlash 宏平均提升</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>Qwen3-4B</td><td class="best">+30.9%</td><td class="best">+16.3%</td><td>九个 benchmark 全部领先</td></tr>
+                <tr><td>Qwen3-8B</td><td class="best">+26.7%</td><td class="best">+18.4%</td><td>跨规模保持增益</td></tr>
+                <tr><td>Qwen3-14B</td><td class="best">+30.0%</td><td class="best">+18.3%</td><td>跨规模保持增益</td></tr>
+                <tr><td>Gemma4-12B</td><td colspan="2" class="best">各 benchmark 一致领先</td><td>跨模型家族泛化</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>结构化任务天然更可预测。以 Qwen3-4B 的 DSpark 为例，论文给出的域平均接受长度为数学 5.57、代码 5.12、对话 3.49。这正是固定 verification length 不合理的“数据侧”证据。</p>
+          <details>
+            <summary>实验公平性：Eagle3、DFlash 与 DSpark 如何对齐</summary>
+            <div class="details-body"><p>论文在同一训练框架、同一数据上重新训练全部 drafter，并使用相同的 target feature layers。Eagle3 的 TTT horizon 与 DFlash / DSpark 的 block size 都设为 7；层数分别为 Eagle3 1 层、DFlash 与 DSpark 5 层。训练数据是 130 万样本的 Open-PerfectBlend，只取 prompt，再由各 target model 用推荐采样参数重新生成 response。评测统一使用 temperature 1.0 与 chain-based drafting。</p></div>
+          </details>
+
+          <figure>
+            <div class="figure-shell"><img src="imgs/figure-2-position-acceptance.jpg" width="1188" height="299" alt="DFlash、Eagle3 与 DSpark 在数学、代码、对话三个域上的逐位置条件接受率"></div>
+            <figcaption><b>图 2 · 逐位置条件接受率。</b>DFlash 的第一个位置很强，但后缀明显衰减；Eagle3 后段稳定或上升；DSpark 同时保住高起点与后缀一致性。这张图直接回答“少量自回归为什么有效”。</figcaption>
+          </figure>
+
+          <div class="evidence-pair">
+            <figure><div class="figure-shell"><img src="imgs/figure-3-depth.jpg" width="1121" height="452" loading="lazy" alt="不同 drafter 深度下 DSpark 与 DFlash 的接受长度对比"></div><figcaption><b>图 3 · 深度。</b>2 层 DSpark 已在三个域超过 5 层 DFlash，说明顺序建模比单纯堆并行层更具参数效率。</figcaption></figure>
+            <figure><div class="figure-shell"><img src="imgs/figure-4-proposal-latency.jpg" width="1198" height="292" loading="lazy" alt="不同 proposal length 下 DSpark 与 DFlash 的接受长度及延迟开销"></div><figcaption><b>图 4 · 长块与延迟。</b>γ=15 时相对 DFlash 提升扩大到数学 30%、代码 26%、对话 22%；完整一轮延迟只增加 0.2%-1.3%。</figcaption></figure>
+          </div>
+
+          <h3>confidence head 不只会排序，还能被校准到可用于系统计算</h3>
+          <div class="evidence-pair">
+            <figure><div class="figure-shell"><img src="imgs/figure-5-threshold.jpg" width="1187" height="389" loading="lazy" alt="数学、代码、对话三类任务上的 confidence threshold sweep"></div><figcaption><b>图 5 · 静态阈值诊断。</b>阈值升高会删掉更多最终被拒的后缀，对话最明显，接受率从 45.7% 提升到 95.7%，但保留 token 也随之减少。</figcaption></figure>
+            <figure><div class="figure-shell"><img src="imgs/figure-6-calibration.jpg" width="1187" height="379" loading="lazy" alt="Alpaca 数据集上校准前后四个位置的 reliability diagram"></div><figcaption><b>图 6 · 可靠性图。</b>原始预测普遍过度自信；STS 后四个位置的 ECE 分别降到 2.0%、1.7%、0.8%、0.4%。</figcaption></figure>
+          </div>
+        </section>
+
+        <section id="production">
+          <div class="section-no">05 · PRODUCTION</div>
+          <h2>线上部署检验的是 Pareto 前沿，不是单一 benchmark 分数</h2>
+          <p class="lead">论文把 DSpark-5 部署到 DeepSeek-V4-Flash 与 V4-Pro preview serving engine，对比此前生产使用的 MTP-1。线上散点来自真实用户流量，目标同时包含每用户生成速度和整机聚合吞吐。</p>
+          <figure>
+            <div class="figure-shell"><img src="imgs/figure-7-pareto.jpg" width="1250" height="466" loading="lazy" alt="DeepSeek-V4-Flash 与 V4-Pro 上 DSpark 相对 MTP 的吞吐和单用户 TPS Pareto 前沿"></div>
+            <figcaption><b>图 7 · Throughput-interactivity Pareto frontier。</b>在中等 SLA，Flash 80 tok/s/user 与 Pro 35 tok/s/user 下，聚合吞吐分别提高 51% 与 52%。在匹配的实际吞吐水平上，单用户速度分别提高 60%-85% 与 57%-78%。</figcaption>
+          </figure>
+          <div class="callout"><strong>不要误读 661% 与 406%</strong><p>这两个高 SLA 点对应 MTP-1 已接近运行边界、只能维持极小并发，分母趋近失效。论文明确把它们解释为“DSpark 打开了 baseline 无法有效支持的交互档位”，而不是常规负载下可复用的倍数。</p></div>
+
+          <h3>调度器随负载主动收紧预算</h3>
+          <figure>
+            <div class="figure-shell"><img src="imgs/figure-8-load-budget.jpg" width="1135" height="674" loading="lazy" alt="DeepSeek-V4-Flash 与 V4-Pro 随并发增长的吞吐曲线和平均验证预算"></div>
+            <figcaption><b>图 8 · 负载自适应机制。</b>中等并发下，DSpark 把 MTP-1 固定的 2-token 验证扩展到约 4-6 token；并发继续升高、target 容量饱和时，预算平滑下降，优先保住 batch 容量。</figcaption>
+          </figure>
+
+          <h3>理论算法如何适应真实引擎</h3>
+          <div class="process">
+            <div class="process-step"><div><b>两步前预测，隐藏调度延迟</b><p>ZOS 要求下一步 batch 在当前 step 完成前就已知，因此生产版用两步前的 confidence 估计容量 K，当前候选仍按最新累计置信度排序。</p></div></div>
+            <div class="process-step"><div><b>异步形成因果屏障</b><p>理论算法为保持因果性在 throughput 首次下降时停止；真实 SPS(B) 是锯齿状的。生产版可做不受 early stop 限制的全局搜索，因为长度决策只依赖两步前的历史预测，不会看到当前 token。</p></div></div>
+            <div class="process-step"><div><b>物理执行与逻辑序列解耦</b><p>不同请求的动态 verification length 会破坏固定 query kernel。系统把 token 展平为独立元素，用 marker tensor 在 sparse attention 中表达序列依赖。</p></div></div>
+          </div>
+          <details>
+            <summary>生产训练如何降低目标模型监督成本</summary>
+            <div class="details-body"><p>DSpark 在 HAI-LLM 中训练。它不跨 worker 传输约 10<sup>5</sup> 词表的完整 logits，而是传 LM head 前的 hidden state，再只在采样位置本地投影，单 token 通信复杂度降为 <code>O(d)</code>。同时用 anchor-bounded sequence packing 把固定数量的 draft block 密集打包，让 drafter 成本与 target 的长上下文长度解耦。</p></div>
+          </details>
+          <p>论文同时宣布开放 DeepSeek-V4-Flash / V4-Pro preview 的 DSpark checkpoints，并开放包含 Eagle3、DFlash 与 DSpark 的训练仓库 DeepSpec。本页没有使用这些外部仓库补充论文事实。</p>
+        </section>
+
+        <section id="boundary">
+          <div class="section-no">06 · BOUNDARY</div>
+          <h2>这篇论文证明了什么，又没有证明什么</h2>
+          <div class="boundary">
+            <div><b>已经闭环</b><p>半自回归结构提高固定块 draft 质量；confidence 具备区分能力并可校准；负载感知预算在真实 DeepSeek-V4 流量中把 serving Pareto 前沿向外推。</p></div>
+            <div><b>仍有固定成本</b><p>无论最终保留几位，parallel backbone 先生成完整 γ-token block 的成本已经发生。对天生低接受率的复杂请求，这部分计算无法收回。</p></div>
+            <div><b>离线和线上回答不同问题</b><p>离线 Table 1 关闭 scheduler，只比较接受长度；线上 Figure 7/8 才是架构与调度合并后的系统结果。两者不能混成一个“端到端加速倍数”。</p></div>
+            <div><b>高 SLA 巨幅比值要谨慎</b><p>661% / 406% 来自 baseline 接近容量崩塌的区域，主要证明可行运行边界被扩展，不代表常规负载普遍有 4-7 倍收益。</p></div>
+          </div>
+          <p class="lead" style="margin-top:2rem"><strong>一句话带走：</strong>DSpark 的价值不是“又一个更准的 drafter”，而是把 token 级置信度真正接到了系统容量曲线上。生成模型决定有哪些候选，调度器决定此刻哪些候选值得占用 target compute。</p>
+        </section>
+      </article>
+    </main>
+
+    <aside class="toc" aria-label="文章目录">
+      <div class="toc-title">阅读路径</div>
+      <a href="#tldr">00 · 30 秒结论</a>
+      <a href="#problem">01 · 三笔速度账</a>
+      <a href="#architecture">02 · 半自回归</a>
+      <a href="#scheduler">03 · 置信度调度</a>
+      <a href="#evidence">04 · 离线证据</a>
+      <a href="#production">05 · 线上部署</a>
+      <a href="#boundary">06 · 结论边界</a>
+    </aside>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <p><strong>原文</strong>：DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation，Xin Cheng、Xingkai Yu、Chenze Shao、Jiashi Li、Yunfan Xiong 等，Peking University 与 DeepSeek-AI，arXiv:2607.05147v1。</p>
+      <p><a href="https://arxiv.org/abs/2607.05147v1" target="_blank" rel="noopener">arXiv 摘要页 ↗</a> · <a href="https://arxiv.org/pdf/2607.05147v1" target="_blank" rel="noopener">论文 PDF ↗</a></p>
+      <p>数据源声明：页面事实仅依据 GLM-OCR 对 arXiv v1 PDF 生成的 Markdown、JSON、裁剪图，以及同一 PDF 的必要核对。中文图解与示意是对该唯一数据源的结构化转述，没有使用 arXiv HTML 正文、作者博客、代码仓库或第三方解读补充论文事实。</p>
+      <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh"><span class="production-label">制作信息</span><span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span><span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span></p>
+    </div>
+  </footer>
+</body>
+</html>
