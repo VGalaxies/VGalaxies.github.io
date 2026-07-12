@@ -8,6 +8,16 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: taxonomy-of-self-evolving-agents
+    title: '自进化 Agent 到底进化了什么'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Self-improvement'
+      - 'Continual Learning'
+      - 'Automated Discovery'
+    source_url: 'https://lsl.zone/blog/2026/a-taxonomy-of-self-evolving-agents/'
   - slug: cost-effective-harnesses-with-fable
     title: 'Fable 5 怎么把判断力放在关键节点'
     date: 2026-07-13

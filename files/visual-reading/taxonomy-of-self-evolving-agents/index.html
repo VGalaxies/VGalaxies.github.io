@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="《A Taxonomy of Self-evolving Agents》中文可视化阅读笔记：用 Model、Harness、Artifact 三个变化位置，分清产物优化、Harness 自改进与无金标准答案的模型学习。">
+  <meta name="visual-reading-tags" content="Agent Systems, Self-improvement, Continual Learning, Automated Discovery">
+  <title>自进化 Agent 到底进化了什么？一张三层分类图谱</title>
+  <style>
+    :root {
+      --paper: oklch(97.4% 0.010 82);
+      --paper-2: oklch(94.8% 0.017 82);
+      --panel-2: oklch(92.6% 0.025 84);
+      --paper-deep: oklch(88.8% 0.031 82);
+      --ink: oklch(25% 0.025 64);
+      --ink-soft: oklch(37% 0.026 63);
+      --muted: oklch(52% 0.025 65);
+      --line: oklch(82% 0.028 76);
+      --artifact: oklch(51% 0.13 44);
+      --artifact-soft: oklch(91.5% 0.047 48);
+      --harness: oklch(47% 0.095 150);
+      --harness-soft: oklch(91.5% 0.038 150);
+      --model: oklch(47% 0.105 252);
+      --model-soft: oklch(91.5% 0.038 252);
+      --shadow: 0 1px 2px color-mix(in oklch, var(--ink) 12%, transparent), 0 18px 44px color-mix(in oklch, var(--ink) 8%, transparent);
+      --r-sm: 5px;
+      --r-md: 10px;
+      --r-lg: 18px;
+      --pill: 999px;
+      --max: 1180px;
+      --read: 760px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: .22;
+      background-image: radial-gradient(color-mix(in oklch, var(--ink) 16%, transparent) .55px, transparent .55px);
+      background-size: 7px 7px;
+    }
+    a { color: color-mix(in oklch, var(--artifact) 82%, var(--ink)); text-underline-offset: .22em; text-decoration-thickness: 1px; }
+    p { margin: .85rem 0; max-width: 70ch; text-wrap: pretty; }
+    strong { font-weight: 760; }
+    img { display: block; max-width: 100%; height: auto; }
+    button, summary, a { touch-action: manipulation; }
+    button, summary { font: inherit; }
+    :focus-visible { outline: 3px solid color-mix(in oklch, var(--model) 34%, transparent); outline-offset: 3px; }
+    h1, h2, h3, h4, blockquote, .serif {
+      font-family: "Iowan Old Style", "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
+      text-wrap: balance;
+    }
+    code, .mono, .kicker, .section-no, .toc-label, .axis-label, .chip, .source-label {
+      font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: .55rem;
+      left: .55rem;
+      z-index: 100;
+      padding: .6rem .85rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      transform: translateY(-150%);
+      transition: transform 150ms cubic-bezier(.16, 1, .3, 1);
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: color-mix(in oklch, var(--paper) 96%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 78%, transparent);
+    }
+    .header-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Songti SC", serif;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .header-links { display: flex; align-items: center; gap: .35rem; }
+    .header-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .76rem;
+      color: var(--muted);
+      border-radius: var(--pill);
+      font-size: .82rem;
+      text-decoration: none;
+    }
+    .header-link.source { color: var(--paper); background: var(--ink); }
+    .progress { position: absolute; left: 0; bottom: -1px; width: 0; height: 2px; background: var(--artifact); }
+
+    .page {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 220px;
+      gap: 4rem;
+      padding: 4.4rem 0 6rem;
+      align-items: start;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.2rem;
+      align-self: start;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .toc-label { margin: 0 0 .5rem; color: var(--ink-soft); font-size: .68rem; font-weight: 750; letter-spacing: .1em; }
+    .toc a {
+      display: block;
+      min-height: 38px;
+      padding: .48rem .65rem;
+      color: var(--muted);
+      border-bottom: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
+      text-decoration: none;
+      line-height: 1.4;
+    }
+    .toc a.active { color: var(--ink); font-weight: 760; }
+
+    .hero { padding: .4rem 0 4.6rem; border-bottom: 1px solid var(--line); }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.16fr) minmax(280px, .84fr); gap: 3rem; align-items: center; }
+    .kicker { color: var(--artifact); font-size: .73rem; font-weight: 760; letter-spacing: .08em; }
+    h1 {
+      max-width: 850px;
+      margin: 1.15rem 0 1.4rem;
+      font-size: clamp(3.2rem, 7vw, 6.4rem);
+      font-weight: 700;
+      line-height: .98;
+    }
+    h1 .title-line { display: block; }
+    .hero-deck { max-width: 100%; color: var(--ink-soft); font-size: clamp(1.05rem, 1.75vw, 1.26rem); line-height: 1.72; overflow-wrap: anywhere; word-break: break-word; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: .4rem .85rem; margin-top: 1.25rem; color: var(--muted); font-size: .82rem; }
+    .hero-meta span { padding: .16rem .55rem; border: 1px solid var(--line); border-radius: var(--pill); background: color-mix(in oklch, var(--paper) 70%, white); }
+    .classification-key { border-top: 1px solid var(--ink); }
+    .key-row {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: .75rem;
+      align-items: center;
+      min-height: 92px;
+      padding: .9rem .15rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .key-no { color: var(--muted); font-family: "SFMono-Regular", monospace; font-size: .72rem; }
+    .key-name { font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.24rem; font-weight: 700; line-height: 1.28; }
+    .key-target { max-width: 9em; color: var(--muted); font-size: .75rem; text-align: right; line-height: 1.4; }
+    .key-row.artifact .key-name { color: var(--artifact); }
+    .key-row.harness .key-name { color: var(--harness); }
+    .key-row.model .key-name { color: var(--model); }
+
+    .tldr {
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr);
+      gap: 1.5rem;
+      margin: 2.6rem 0 0;
+      padding: 1.35rem 0 1.5rem;
+      border-top: 1px solid var(--ink-soft);
+      border-bottom: 1px solid var(--line);
+    }
+    .tldr-label { padding-top: .18rem; color: var(--artifact); font-family: "SFMono-Regular", monospace; font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
+    .tldr p { margin: 0; max-width: 720px; font-family: "Iowan Old Style", "Songti SC", serif; font-size: clamp(1.14rem, 2vw, 1.42rem); line-height: 1.66; }
+
+    section { margin: 5.5rem 0; scroll-margin-top: 5.4rem; }
+    .section-no { display: block; margin-bottom: .5rem; color: var(--muted); font-size: .72rem; font-weight: 760; letter-spacing: .08em; }
+    h2 { margin: 0 0 1.15rem; font-size: clamp(2rem, 4vw, 3.15rem); line-height: 1.14; }
+    h3 { margin: 2.2rem 0 .65rem; font-size: clamp(1.28rem, 2.3vw, 1.65rem); line-height: 1.3; }
+    h4 { margin: 0 0 .45rem; font-size: 1.08rem; }
+    .lead { color: var(--ink-soft); font-size: 1.07rem; }
+
+    .triad {
+      position: relative;
+      min-height: 430px;
+      margin: 2.2rem 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in oklch, var(--paper-2) 58%, transparent);
+      overflow: hidden;
+    }
+    .triad::before, .triad::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      width: 1px;
+      height: 155px;
+      background: var(--line);
+      transform-origin: bottom;
+    }
+    .triad::before { top: 66px; transform: rotate(58deg); }
+    .triad::after { top: 66px; transform: rotate(-58deg); }
+    .triad-line { position: absolute; left: 50%; top: 186px; width: 1px; height: 150px; background: var(--line); }
+    .triad-node {
+      position: absolute;
+      width: 210px;
+      min-height: 118px;
+      padding: 1rem 1.05rem;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      border-radius: var(--r-md);
+    }
+    .triad-node strong { display: block; font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.4rem; }
+    .triad-node small { display: block; margin-top: .35rem; color: var(--muted); line-height: 1.48; }
+    .triad-node.model { left: 3%; bottom: 42px; box-shadow: inset 0 3px 0 var(--model), var(--shadow); }
+    .triad-node.harness { left: 50%; top: 35px; transform: translateX(-50%); box-shadow: inset 0 3px 0 var(--harness), var(--shadow); }
+    .triad-node.artifact { right: 3%; bottom: 42px; box-shadow: inset 0 3px 0 var(--artifact), var(--shadow); }
+    .equation {
+      position: absolute;
+      left: 50%;
+      top: 220px;
+      z-index: 2;
+      width: 180px;
+      padding: .55rem .7rem;
+      color: var(--paper);
+      background: var(--ink);
+      border-radius: var(--pill);
+      text-align: center;
+      transform: translateX(-50%);
+      font-family: "SFMono-Regular", monospace;
+      font-size: .78rem;
+    }
+
+    .reading-rule {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin: 1.6rem 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .rule-item { padding: 1.1rem 1rem 1.25rem; border-right: 1px solid var(--line); }
+    .rule-item:last-child { border-right: 0; }
+    .rule-item b { display: block; margin-bottom: .35rem; font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.15rem; }
+    .rule-item span { display: block; color: var(--muted); font-size: .88rem; line-height: 1.55; }
+
+    .taxonomy-lab {
+      margin: 2rem 0 2.5rem;
+      background: color-mix(in oklch, var(--paper) 78%, white);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .lab-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); }
+    .lab-tab {
+      min-height: 86px;
+      padding: .9rem 1rem;
+      border: 0;
+      border-right: 1px solid var(--line);
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      transition-property: transform, background-color, color;
+      transition-duration: 160ms;
+      transition-timing-function: cubic-bezier(.16, 1, .3, 1);
+    }
+    .lab-tab:last-child { border-right: 0; }
+    .lab-tab:active { transform: scale(.98); }
+    .lab-tab span { display: block; margin-bottom: .2rem; font-family: "SFMono-Regular", monospace; font-size: .67rem; }
+    .lab-tab b { display: block; color: var(--ink); font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.05rem; }
+    .lab-tab[aria-selected="true"][data-kind="artifact"] { color: var(--artifact); background: var(--artifact-soft); }
+    .lab-tab[aria-selected="true"][data-kind="harness"] { color: var(--harness); background: var(--harness-soft); }
+    .lab-tab[aria-selected="true"][data-kind="model"] { color: var(--model); background: var(--model-soft); }
+    .lab-panel { display: grid; grid-template-columns: minmax(250px, .78fr) minmax(0, 1.22fr); gap: 2rem; padding: 2rem; }
+    .loop-sketch { min-height: 350px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .loop-circuit {
+      position: relative;
+      width: min(300px, 100%);
+      padding-right: 38px;
+    }
+    .loop-stage {
+      min-height: 78px;
+      padding: .8rem 1rem .9rem;
+      background: color-mix(in oklch, var(--paper) 72%, white);
+      border-top: 1px solid var(--line);
+    }
+    .loop-stage:last-of-type { border-bottom: 1px solid var(--line); }
+    .loop-stage + .loop-stage { margin-top: .42rem; }
+    .loop-stage.loop-target { border-radius: var(--r-md); box-shadow: var(--shadow); }
+    .loop-step { display: block; margin-bottom: .25rem; color: var(--muted); font-family: "SFMono-Regular", monospace; font-size: .62rem; font-weight: 760; letter-spacing: .06em; }
+    .loop-stage strong { display: block; color: var(--ink-soft); font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1rem; line-height: 1.4; }
+    .loop-circuit[data-kind="artifact"] .loop-target { background: var(--artifact-soft); box-shadow: inset 0 3px 0 var(--artifact), var(--shadow); }
+    .loop-circuit[data-kind="harness"] .loop-target { background: var(--harness-soft); box-shadow: inset 0 3px 0 var(--harness), var(--shadow); }
+    .loop-circuit[data-kind="model"] .loop-target { background: var(--model-soft); box-shadow: inset 0 3px 0 var(--model), var(--shadow); }
+    .loop-return {
+      position: absolute;
+      top: 26px;
+      right: 0;
+      bottom: 26px;
+      width: 30px;
+      border: 1px solid var(--line);
+      border-left: 0;
+      border-radius: 0 18px 18px 0;
+    }
+    .loop-return span {
+      position: absolute;
+      top: 50%;
+      right: -14px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      color: var(--paper);
+      border-radius: 50%;
+      font-size: 1rem;
+      transform: translateY(-50%);
+    }
+    .loop-circuit[data-kind="artifact"] .loop-return span { background: var(--artifact); }
+    .loop-circuit[data-kind="harness"] .loop-return span { background: var(--harness); }
+    .loop-circuit[data-kind="model"] .loop-return span { background: var(--model); }
+    .loop-feedback { width: min(300px, 100%); margin: .9rem 0 0; color: var(--muted); font-size: .75rem; line-height: 1.5; text-align: left; }
+    .lab-copy h3 { margin-top: 0; }
+    .lab-definition { color: var(--ink-soft); font-size: 1.04rem; }
+    .axis-grid { margin: 1.2rem 0 0; border-top: 1px solid var(--line); }
+    .axis-row { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; padding: .72rem 0; border-bottom: 1px solid var(--line); }
+    .axis-label { color: var(--muted); font-size: .7rem; letter-spacing: .04em; }
+    .axis-value { font-size: .9rem; line-height: 1.5; }
+    .lab-examples { margin: 1rem 0 0; padding-left: 1.1rem; color: var(--ink-soft); }
+    .lab-examples li { margin: .45rem 0; }
+
+    .section-band { padding: 2rem; background: var(--paper-2); border-radius: var(--r-lg); }
+    .section-band.artifact { box-shadow: inset 0 3px 0 var(--artifact); }
+    .section-band.harness { box-shadow: inset 0 3px 0 var(--harness); }
+    .section-band.model { box-shadow: inset 0 3px 0 var(--model); }
+    .mechanism {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      align-items: stretch;
+      margin: 1.6rem 0 1rem;
+    }
+    .mechanism-step { position: relative; min-height: 132px; padding: 1rem .85rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .mechanism-step + .mechanism-step { border-left: 1px solid var(--line); }
+    .mechanism-step + .mechanism-step::before { content: "→"; position: absolute; left: -.55rem; top: 50%; z-index: 2; width: 1.1rem; color: var(--muted); background: var(--paper-2); text-align: center; transform: translateY(-50%); }
+    .mechanism-step b { display: block; margin-bottom: .35rem; font-family: "Iowan Old Style", "Songti SC", serif; line-height: 1.35; }
+    .mechanism-step small { color: var(--muted); line-height: 1.45; }
+
+    figure { margin: 2.2rem 0; }
+    .source-figure { overflow: hidden; background: white; border-radius: var(--r-lg); box-shadow: var(--shadow); }
+    .source-figure img { width: 100%; outline: 1px solid rgba(0,0,0,.08); outline-offset: -1px; }
+    figcaption { padding: 1rem 1.15rem 1.15rem; color: var(--ink-soft); font-size: .9rem; line-height: 1.62; }
+    .source-label { display: block; margin-bottom: .35rem; color: var(--muted); font-size: .67rem; font-weight: 750; letter-spacing: .08em; }
+
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin: 1.8rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .metric { min-height: 135px; padding: 1rem; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric strong { display: block; color: var(--artifact); font-family: "SFMono-Regular", monospace; font-size: clamp(1.65rem, 3vw, 2.25rem); font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .metric b { display: block; margin-top: .42rem; }
+    .metric small { display: block; margin-top: .3rem; color: var(--muted); line-height: 1.45; }
+
+    .branch-map { margin: 1.7rem 0; border-top: 1px solid var(--line); }
+    .branch { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 1rem; padding: 1.2rem 0; border-bottom: 1px solid var(--line); }
+    .branch-title { color: var(--harness); font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.13rem; font-weight: 700; }
+    .branch-copy p { margin-top: 0; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .chip { padding: .28rem .55rem; color: var(--ink-soft); background: color-mix(in oklch, var(--paper) 70%, white); border: 1px solid var(--line); border-radius: var(--pill); font-size: .68rem; }
+
+    .routing-note {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(230px, .75fr);
+      gap: 2rem;
+      margin: 2rem 0;
+      padding: 1.5rem;
+      background: var(--harness-soft);
+      border-radius: var(--r-md);
+    }
+    blockquote { margin: 0; color: var(--harness); font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.08; }
+    .routing-note p { margin: 0; color: color-mix(in oklch, var(--harness) 68%, var(--ink)); }
+
+    .signals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 1.6rem 0; background: var(--line); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .signal { min-height: 210px; padding: 1.2rem; background: var(--paper); }
+    .signal-no { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-bottom: .8rem; color: var(--paper); background: var(--model); border-radius: 50%; font-family: "SFMono-Regular", monospace; font-size: .72rem; }
+    .signal p { color: var(--muted); font-size: .88rem; line-height: 1.58; }
+
+    .term-table { width: 100%; border-collapse: collapse; margin: 1.6rem 0; font-size: .9rem; }
+    .table-wrap { overflow-x: auto; }
+    .term-table th, .term-table td { min-width: 150px; padding: .8rem .75rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .term-table th { color: var(--muted); font-family: "SFMono-Regular", monospace; font-size: .68rem; letter-spacing: .05em; }
+    .term-table td:first-child { color: var(--ink); font-weight: 760; }
+
+    .blurred {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(260px, .9fr);
+      gap: 2.2rem;
+      align-items: center;
+      margin: 2rem 0;
+    }
+    .flywheel { position: relative; min-height: 360px; }
+    .fly-node {
+      position: absolute;
+      width: 132px;
+      min-height: 74px;
+      display: grid;
+      place-items: center;
+      padding: .75rem;
+      border-radius: var(--r-md);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      text-align: center;
+      font-family: "Iowan Old Style", "Songti SC", serif;
+      font-weight: 700;
+    }
+    .fly-node.model { left: 0; bottom: 34px; box-shadow: inset 0 3px 0 var(--model), var(--shadow); }
+    .fly-node.harness { left: 50%; top: 20px; transform: translateX(-50%); box-shadow: inset 0 3px 0 var(--harness), var(--shadow); }
+    .fly-node.artifact { right: 0; bottom: 34px; box-shadow: inset 0 3px 0 var(--artifact), var(--shadow); }
+    .fly-arrow { position: absolute; color: var(--muted); font-size: 2rem; }
+    .fly-arrow.one { left: 24%; top: 38%; transform: rotate(-36deg); }
+    .fly-arrow.two { right: 24%; top: 38%; transform: rotate(36deg); }
+    .fly-arrow.three { left: 50%; bottom: 13px; transform: translateX(-50%); }
+    .fly-center { position: absolute; left: 50%; top: 55%; width: 145px; color: var(--ink-soft); transform: translate(-50%, -50%); text-align: center; font-size: .82rem; line-height: 1.4; }
+
+    .abstraction { margin: 2rem 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+    .abstract-row { display: grid; grid-template-columns: 62px 170px 1fr; gap: 1rem; align-items: baseline; padding: .95rem 0; border-bottom: 1px solid var(--line); }
+    .abstract-row:last-child { border-bottom: 0; }
+    .abstract-row .step { color: var(--muted); font-family: "SFMono-Regular", monospace; font-size: .7rem; }
+    .abstract-row b { font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.1rem; }
+    .abstract-row span:last-child { color: var(--muted); font-size: .88rem; }
+
+    .three-questions { margin: 2rem 0; }
+    .question {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 1.15rem;
+      padding: 1.35rem 0;
+      border-top: 1px solid var(--line);
+    }
+    .question:last-child { border-bottom: 1px solid var(--line); }
+    .question-no {
+      display: block;
+      padding-top: .34rem;
+      color: var(--artifact);
+      font-family: "SFMono-Regular", monospace;
+      font-size: .7rem;
+      font-weight: 760;
+      letter-spacing: .08em;
+      line-height: 1;
+    }
+    .question-no::after { content: ""; display: block; width: 18px; height: 1px; margin-top: .55rem; background: var(--line); }
+    .question b { display: block; font-family: "Iowan Old Style", "Songti SC", serif; font-size: 1.35rem; }
+    .question-answer { display: block; margin-top: .32rem; color: var(--muted); }
+
+    details { margin: 1rem 0; padding: .15rem 1rem; background: color-mix(in oklch, var(--paper) 74%, white); border: 1px solid var(--line); border-radius: var(--r-md); }
+    summary { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--ink-soft); cursor: pointer; font-weight: 760; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--muted); font-family: "SFMono-Regular", monospace; font-size: 1.1rem; }
+    details[open] { padding-bottom: .85rem; }
+    details[open] summary::after { content: "−"; }
+    details p, details ul { color: var(--muted); font-size: .9rem; }
+    details li { margin: .45rem 0; }
+
+    .conclusion {
+      padding: 2rem 0 2.4rem;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+    .conclusion p { font-family: "Iowan Old Style", "Songti SC", serif; font-size: clamp(1.18rem, 2.2vw, 1.5rem); line-height: 1.68; }
+
+    footer { margin-top: 5rem; padding-top: 2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
+    .footer-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(250px, .8fr); gap: 2rem; }
+    .footer-grid p { margin-top: 0; }
+    .tags { display: flex; flex-wrap: wrap; gap: .42rem; margin-top: 1rem; }
+    .tag { padding: .3rem .62rem; color: var(--ink-soft); border: 1px solid var(--line); border-radius: var(--pill); background: var(--paper-2); font-family: "SFMono-Regular", monospace; font-size: .68rem; }
+    .footer-grid .production-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1rem 0 0;
+      padding-top: .9rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }
+    .production-label { margin-right: .1rem; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+    .production-chip { display: inline-flex; align-items: baseline; gap: .38rem; padding: .22rem .58rem; background: var(--paper-2); border-radius: var(--pill); line-height: 1.35; }
+    .production-key { color: var(--muted); font-family: "SFMono-Regular", monospace; font-size: .68rem; letter-spacing: .04em; }
+    .production-value { color: var(--ink-soft); font-family: "SFMono-Regular", monospace; font-size: .72rem; font-weight: 650; }
+
+    @media (hover: hover) {
+      .header-link:hover, .toc a:hover { color: var(--ink); }
+      .lab-tab:hover { background: var(--paper-2); }
+    }
+    @media (max-width: 920px) {
+      .page { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 3rem; }
+      .toc { display: none; }
+      .hero-grid { grid-template-columns: minmax(0, 1fr); }
+      .classification-key { margin-top: 1rem; }
+      .lab-panel, .blurred, .routing-note { grid-template-columns: minmax(0, 1fr); }
+      .mechanism { grid-template-columns: 1fr; }
+      .mechanism-step + .mechanism-step { border-left: 0; border-top: 0; }
+      .mechanism-step + .mechanism-step::before { content: "↓"; left: 50%; top: -.65rem; transform: translateX(-50%); background: var(--paper-2); }
+      .branch { grid-template-columns: minmax(0, 1fr); gap: .4rem; }
+    }
+    @media (max-width: 700px) {
+      .header-inner { width: min(100% - 1rem, var(--max)); }
+      .header-link:not(.source) { display: none; }
+      .page { width: min(100% - 1.2rem, var(--max)); padding-top: 2.2rem; }
+      h1 { max-width: 100%; font-size: clamp(2.65rem, 14vw, 4.4rem); line-height: 1.01; }
+      .tldr { grid-template-columns: minmax(0, 1fr); gap: .45rem; }
+      .reading-rule, .metrics, .signals { grid-template-columns: minmax(0, 1fr); }
+      .rule-item, .metric { border-right: 0; border-bottom: 1px solid var(--line); }
+      .rule-item:last-child, .metric:last-child { border-bottom: 0; }
+      .lab-tabs { grid-template-columns: minmax(0, 1fr); }
+      .lab-tab { min-height: 72px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .lab-tab:last-child { border-bottom: 0; }
+      .lab-panel, .section-band { padding: 1.1rem; }
+      .triad { min-height: auto; padding: 1rem; display: grid; gap: .8rem; }
+      .triad::before, .triad::after, .triad-line, .equation { display: none; }
+      .triad-node { position: static; width: 100%; min-height: 0; transform: none !important; }
+      .triad-node.harness { order: 1; }
+      .triad-node.model { order: 2; }
+      .triad-node.artifact { order: 3; }
+      .abstract-row { grid-template-columns: 44px minmax(0, 1fr); }
+      .abstract-row span:last-child { grid-column: 2; }
+      .footer-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 390px) {
+      .key-row { grid-template-columns: 34px 1fr; }
+      .key-target { grid-column: 2; max-width: none; text-align: left; }
+      .lab-panel { padding: .9rem; }
+      .axis-row { grid-template-columns: minmax(0, 1fr); gap: .2rem; }
+      .fly-node { width: 112px; font-size: .88rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#top">VGalaxies · Visual Reading</a>
+      <nav class="header-links" aria-label="顶部导航">
+        <a class="header-link" href="#taxonomy">分类图谱</a>
+        <a class="header-link" href="#boundary">边界与未来</a>
+        <a class="header-link source" href="https://lsl.zone/blog/2026/a-taxonomy-of-self-evolving-agents/" target="_blank" rel="noopener noreferrer">阅读原文</a>
+      </nav>
+    </div>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+  </header>
+
+  <div class="page" id="top">
+    <main id="main">
+      <article>
+        <header class="hero">
+          <div class="hero-grid">
+            <div>
+              <div class="kicker">BLOG VISUAL NOTE · 2026-07-08</div>
+              <h1><span class="title-line">自进化</span><span class="title-line" lang="en">Agent，</span><span class="title-line">到底进化</span><span class="title-line">了什么？</span></h1>
+              <p class="hero-deck"><span lang="en">“self-evolving”</span>、<wbr><span lang="en">“self-improving”</span>、<wbr><span lang="en">“learning”</span> 和<wbr><span lang="en">“adapting”</span> 经常被混在一起。Shilong Liu 给出的解法不是争论命名，而是追问：变化发生在 Model、Harness，还是 Agent 产出的 Artifact？</p>
+              <div class="hero-meta">
+                <span>原文作者：Shilong Liu</span>
+                <span>来源：lsl.zone</span>
+                <span>阅读任务：澄清一组容易混淆的概念</span>
+              </div>
+            </div>
+            <div class="classification-key" aria-label="三类自进化系统速览">
+              <div class="key-row artifact"><span class="key-no">01</span><span class="key-name">产物迭代优化</span><span class="key-target">闭环落在输出</span></div>
+              <div class="key-row harness"><span class="key-no">02</span><span class="key-name">Harness 自我改进</span><span class="key-target">闭环落在代理框架</span></div>
+              <div class="key-row model"><span class="key-no">03</span><span class="key-name">无金标准答案的模型学习</span><span class="key-target">闭环落在模型权重</span></div>
+            </div>
+          </div>
+          <div class="tldr">
+            <div class="tldr-label">TL;DR</div>
+            <p>作者的核心分类标准是<strong>“谁被更新”</strong>。Artifact 优化让 Agent 反复改进外部产物；Harness 改进让 Agent 更新自己的提示词、记忆、工具、技能或专家结构；Model 学习则用伪标签、内部信号、自博弈或环境反馈改变权重。三者在早期系统里常被分开，成熟系统会逐渐把它们连成一个共同进化的闭环。</p>
+          </div>
+        </header>
+
+        <section id="frame">
+          <span class="section-no">01 · FRAME</span>
+          <h2>先把 Agent 拆成三个可变化的位置</h2>
+          <p class="lead">这篇文章最有价值的不是又造一个术语，而是提供了一组足够稳定的观察对象。只要先问清 Model、Harness、Artifact 各自是什么，后面的“学习”与“进化”就容易分开。</p>
+
+          <div class="triad" role="img" aria-label="Model 与 Harness 共同组成 Agent，Agent 再产生 Artifact">
+            <div class="triad-node model"><strong>Model</strong><small>响应提示的“大脑”，通常是大语言模型。</small></div>
+            <div class="triad-node harness"><strong>Harness</strong><small>循环设计、提示词、记忆、工具、技能与其他运行时组件。</small></div>
+            <div class="triad-node artifact"><strong>Artifact</strong><small>Agent 产出的算法、代码、论文、发现、材料或机器人策略。</small></div>
+            <div class="triad-line" aria-hidden="true"></div>
+            <div class="equation">Agent = Model + Harness</div>
+          </div>
+
+          <div class="reading-rule" aria-label="分类时的三个判断问题">
+            <div class="rule-item"><b>谁在变化？</b><span>输出、代理运行框架，还是模型参数。</span></div>
+            <div class="rule-item"><b>反馈从哪来？</b><span>评估器、记忆与历史、内部信号、其他玩家或真实环境。</span></div>
+            <div class="rule-item"><b>闭环落在哪里？</b><span>最后被持续改好的对象，决定系统属于哪一层。</span></div>
+          </div>
+          <p>这里有一个关键提醒：名称里出现 “learning” 并不意味着一定更新权重。只要把 Harness 视为 Agent 的一部分，那么提示词、记忆、工具和技能的变化，也可以合理地被称为 Agent 学习。</p>
+        </section>
+
+        <section id="taxonomy">
+          <span class="section-no">02 · TAXONOMY</span>
+          <h2>同样叫“自进化”，三个闭环其实在改不同东西</h2>
+          <p class="lead">点击三种类型，在同一个坐标系里比较变化对象、反馈信号、是否修改权重，以及作者列举的代表工作。</p>
+
+          <div class="taxonomy-lab">
+            <div class="lab-tabs" role="tablist" aria-label="自进化系统三类闭环">
+              <button class="lab-tab" id="tab-artifact" role="tab" aria-selected="true" aria-controls="lab-panel" data-kind="artifact"><span>01 / OUTPUT LOOP</span><b>产物迭代优化</b></button>
+              <button class="lab-tab" id="tab-harness" role="tab" aria-selected="false" aria-controls="lab-panel" data-kind="harness"><span>02 / SELF-MODIFY</span><b>Harness 自我改进</b></button>
+              <button class="lab-tab" id="tab-model" role="tab" aria-selected="false" aria-controls="lab-panel" data-kind="model"><span>03 / WEIGHT UPDATE</span><b>模型学习</b></button>
+            </div>
+            <div class="lab-panel" id="lab-panel" role="tabpanel" aria-labelledby="tab-artifact" tabindex="0">
+              <div class="loop-sketch" aria-hidden="true">
+                <div class="loop-circuit" id="loop-circuit" data-kind="artifact">
+                  <div class="loop-stage"><span class="loop-step">01 / FEEDBACK</span><strong id="loop-source">评估器 / 环境结果</strong></div>
+                  <div class="loop-stage loop-target"><span class="loop-step">02 / UPDATE</span><strong id="loop-center">Artifact · 产物</strong></div>
+                  <div class="loop-stage"><span class="loop-step">03 / NEXT</span><strong id="loop-result">更优候选进入下一轮</strong></div>
+                  <div class="loop-return"><span>↺</span></div>
+                </div>
+                <p class="loop-feedback" id="loop-feedback">候选方案 → 评估 → 保留反馈 → 再生成</p>
+              </div>
+              <div class="lab-copy">
+                <h3 id="lab-title">产物迭代优化</h3>
+                <p class="lab-definition" id="lab-definition">人类定义目标与评估标准，Agent 反复提出、检验并改写外部产物。系统看起来在“自进化”，但直接被优化的是输出，不一定是 Agent 自身。</p>
+                <div class="axis-grid">
+                  <div class="axis-row"><span class="axis-label">WHAT CHANGES</span><span class="axis-value" id="lab-change">算法、代码、论文、科学发现、机器人策略等 Artifact</span></div>
+                  <div class="axis-row"><span class="axis-label">FEEDBACK</span><span class="axis-value" id="lab-signal">明确评估标准、执行结果、模拟器或实验环境反馈</span></div>
+                  <div class="axis-row"><span class="axis-label">MODEL WEIGHTS</span><span class="axis-value" id="lab-weights">通常保持不变</span></div>
+                  <div class="axis-row"><span class="axis-label">LOOP CLOSES ON</span><span class="axis-value" id="lab-close">被搜索和验证的外部结果</span></div>
+                </div>
+                <ul class="lab-examples" id="lab-examples"><li>AlphaEvolve：算法与科学发现</li><li>FARS：自动研究与论文生成</li><li>NVIDIA ENPIRÉ、LabOS、Qumus：把闭环推进机器人、实验室与材料世界</li></ul>
+              </div>
+            </div>
+          </div>
+
+          <figure class="source-figure">
+            <img src="imgs/fig-all.png" width="1414" height="794" loading="lazy" alt="原文总图：Model、Harness、Artifact 三个节点分别带有无金标准答案学习、自我改进和输出优化的循环箭头">
+            <figcaption><span class="source-label">ORIGINAL FIGURE · SHILONG LIU</span>原文最终把三类循环放在同一张图里。它证明这不是三种互斥的“Agent 品种”，而是同一系统中三个可能的更新位置。页面前面的交互对照台，是对这张总图的中文拆解。</figcaption>
+          </figure>
+        </section>
+
+        <section id="artifact">
+          <span class="section-no">03 · ARTIFACT</span>
+          <div class="section-band artifact">
+            <h2>第一层：Agent 不改自己，先把产物越做越好</h2>
+            <p class="lead">这波“自进化 Agent”热潮很大一部分来自 Artifact iterative optimization。它的结构并不神秘，变化在于 LLM 同时充当候选生成器、结果阅读者和搜索策略制定者。</p>
+            <div class="mechanism" aria-label="产物迭代优化流程">
+              <div class="mechanism-step"><b>人类定目标</b><small>给出任务、初始方案和评估标准。</small></div>
+              <div class="mechanism-step"><b>Agent 找改进点</b><small>读取历史尝试，决定下一步搜索哪里。</small></div>
+              <div class="mechanism-step"><b>生成新候选</b><small>LLM 创造算法、代码、论文或策略。</small></div>
+              <div class="mechanism-step"><b>执行与评估</b><small>由评估器、模拟器或真实环境给出信号。</small></div>
+              <div class="mechanism-step"><b>通过或继续</b><small>达到标准就结束，否则把反馈送回下一轮。</small></div>
+            </div>
+          </div>
+
+          <h3>LLM 改变了搜索空间，也改变了搜索者</h3>
+          <p>在 LLM 之前，研究者往往先手工定义操作符，再在这些操作符组成的空间里搜索。神经架构搜索和 EfficientNet 是作者给出的旧范式例子。LLM 出现后，模型既能发明新的候选，也能阅读此前结果并决定下一步，因此一边扩大搜索空间，一边提供更灵活的启发式搜索。</p>
+
+          <figure class="source-figure">
+            <img src="imgs/alphaevolve.png" width="956" height="736" loading="lazy" alt="AlphaEvolve 流程图：人类定义问题与评估标准，系统通过提示采样器、LLM 集成、评估器池和程序数据库循环改进程序">
+            <figcaption><span class="source-label">ALPHAEVOLVE PIPELINE · ORIGINAL IMAGE</span>人类负责定义“改什么”和“怎样算好”，AlphaEvolve 负责寻找“怎么改”。历史程序与评分进入数据库，再被采样进下一轮上下文，形成可持续运行的搜索闭环。</figcaption>
+          </figure>
+
+          <div class="metrics" aria-label="原文列举的 FARS 运行数据">
+            <div class="metric"><strong>417 h</strong><b>连续运行</b><small>原文引用 Analemma AI 的 FARS 事件。</small></div>
+            <div class="metric"><strong>166</strong><b>AI 生成论文</b><small>作者用它说明自动研究闭环已能长时间运行。</small></div>
+            <div class="metric"><strong>≈ $180k</strong><b>成本</b><small>这些数字是原文列举的案例数据，不是本页独立复核结果。</small></div>
+          </div>
+
+          <h3>从数字环境走向物理环境</h3>
+          <p>当前大多数 Agent 仍运行在代码库、浏览器、终端和模拟器中，反馈容易自动获得。更有野心的方向是让循环触碰真实世界：NVIDIA 探索机器人策略，LabOS 连接生物实验室，Qumus 面向量子材料实验。作者判断，Artifact 优化的价值最终要看它能否改进 Agent 系统之外的东西。</p>
+          <details>
+            <summary>为什么长时程能力是这类系统的关键变量</summary>
+            <p>作者对比了 2024 年的 LLaVA-Plus 与 2026 年的 Agent：前者能完成的工具调用少于 5 次，需要频繁人工介入；现在的强模型已经可以少干预地运行数小时。循环结构早已存在，真正让它重新变得实用的是模型对长任务的承载能力。</p>
+          </details>
+        </section>
+
+        <section id="harness">
+          <span class="section-no">04 · HARNESS</span>
+          <div class="section-band harness">
+            <h2>第二层：不训练模型，也能让 Agent 在部署后变强</h2>
+            <p class="lead">Harness self-improvement 的目标不是直接改输出，而是更新 Agent 自己的运行组件。文章把它分为提示词与记忆、工具与技能，再进一步延伸到多 Agent 专家系统。</p>
+            <div class="branch-map">
+              <div class="branch">
+                <div class="branch-title">Prompt 与 Memory</div>
+                <div class="branch-copy"><p>不是死记问题与答案，而是抽取可复用规则，写回提示词、playbook 或记忆系统。相似但不完全相同的任务，也可能从这些规则中受益。</p><div class="chip-row"><span class="chip">GEPA / prompt</span><span class="chip">ACE / playbook</span><span class="chip">Mem0 / memory</span></div></div>
+              </div>
+              <div class="branch">
+                <div class="branch-title">Tool 与 Skill</div>
+                <div class="branch-copy"><p>文本知识不总能直接行动。面对长视频取关键帧这类任务，更有效的做法是生成可执行工具，再把工具封装成可复用技能。技能也承担上下文压缩，避免每次把全部细节塞进窗口。</p><div class="chip-row"><span class="chip">Alita / tool</span><span class="chip">Mem-UI / skill</span><span class="chip">Hermes Agent / auto skill</span></div></div>
+              </div>
+              <div class="branch">
+                <div class="branch-title">Expert 与 Router</div>
+                <div class="branch-copy"><p>当 playbook、工具和技能不断增多，单 Agent 会变慢、变混乱。把不同分布的数据交给不同专家，再由 router 分配任务，是把 Harness 改进扩展到多 Agent 的方式。</p><div class="chip-row"><span class="chip">Eevee / experts</span><span class="chip">Alita-G / specialist</span><span class="chip">routing / assignment</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="routing-note">
+            <blockquote lang="en">“A human is a router.”</blockquote>
+            <p>作者把路由视为人类专家的重要能力：我们不仅把任务交给 Agent，还判断该交给谁、是否应该进入下一步。多 Agent 能否扩展，瓶颈往往不是专家数量，而是能否准确选择专家。</p>
+          </div>
+
+          <h3>为什么“更多工具”可能让系统更差</h3>
+          <p>如果用户只问股票，系统不需要携带烹饪工具。无关工具会拖慢选择，也会制造语义冲突。作者用 “squeeze” 举例：它既可能指市场的逼空，也可能指挤橙汁。专家化本质上仍是上下文管理，每个专家只携带自己真正需要的知识、工具和历史。</p>
+          <details>
+            <summary>这一层和 Artifact 优化的分界线</summary>
+            <p>判断标准不是“有没有循环”，而是循环在修改谁。反复优化一段 kernel 代码时，被改的是 Artifact；如果系统为了下次搜索更有效而更新提示词、记忆、工具或搜索策略，那么 Harness 也进入了自我改进。</p>
+          </details>
+        </section>
+
+        <section id="model">
+          <span class="section-no">05 · MODEL</span>
+          <div class="section-band model">
+            <h2>第三层：没有金标准答案，模型权重怎么更新？</h2>
+            <p class="lead">这一方向常常不自称“self-evolving agent”，而使用 self-training、weak supervision、self-play、reinforcement learning、test-time training、online learning 或 continual learning 等名字。共同点是：学习最终改变模型参数。</p>
+            <div class="signals">
+              <div class="signal"><span class="signal-no">01</span><h4>伪标签与内部信号</h4><p>从数据或模型自身构造近似目标。伪标签可用于 SFT，能转成奖励的信号可用于 RL。作者以苹果计数为例：没有真值时，预训练模型对 4、5、6 的置信分布仍比随机猜测更有信息。</p></div>
+              <div class="signal"><span class="signal-no">02</span><h4>自博弈与环境弱信号</h4><p>另一个玩家也可以视作环境的一部分。SPIN、Absolute Zero 使用自博弈，Agent Learning via Early Experience 则从环境交互中学习。即使“没有回应”，也可能构成反馈。</p></div>
+              <div class="signal"><span class="signal-no">03</span><h4>推理期结构更新</h4><p>Test-time Training 走的是另一条路线：某些序列模型可被解释为在推理期间持续对内部矩阵做梯度式更新。目标相近，但机制与 Agent Harness 循环很不同。</p></div>
+            </div>
+          </div>
+
+          <h3>Continual Learning 是一个会随时代漂移的词</h3>
+          <p>经典持续学习关心的是灾难性遗忘：模型学会识别 SUV 后，不能忘掉原先会识别的 sedan。作者指出，旧问题最有效的方法之一至今仍是 replay 一部分旧样本。但在今天的 LLM 讨论中，“continual learning”有时已经被用来指更接近自进化 Agent 的系统。</p>
+
+          <div class="table-wrap">
+            <table class="term-table">
+              <thead><tr><th>术语</th><th>主要变化对象</th><th>典型信号</th><th>与本文分类的关系</th></tr></thead>
+              <tbody>
+                <tr><td>Self-training</td><td>Model</td><td>模型生成的伪标签</td><td>属于无金标准答案的模型学习</td></tr>
+                <tr><td>Reinforcement learning</td><td>Model</td><td>可计算奖励或验证信号</td><td>当奖励不依赖人工金答案时进入本层</td></tr>
+                <tr><td>Continual learning</td><td>Model，语义正在扩张</td><td>连续数据流与旧样本 replay</td><td>经典问题是遗忘，现代用法可能覆盖更广</td></tr>
+                <tr><td>Test-time training</td><td>Model 内部状态或参数</td><td>推理时输入与自监督目标</td><td>目标近似，但架构机制不同</td></tr>
+                <tr><td>Harness learning</td><td>Prompt / Memory / Tool / Skill</td><td>任务历史、错误与可复用经验</td><td>不改模型权重，仍可视为 Agent 学习</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="boundary">
+          <span class="section-no">06 · BLURRED BOUNDARY</span>
+          <h2>真正强的系统，不会永远只改一层</h2>
+          <p class="lead">三分法适合定位一个工作的主要入口，但作者明确提醒：Model、Harness、Artifact 的边界会随着系统能力提升而模糊。</p>
+
+          <div class="blurred">
+            <div>
+              <p>优化 kernel 时，直接目标是 Artifact；但为了搜索更有效，系统可能同时改进提示词、工具、记忆和搜索策略。Harness 走到极限后，更新模型参数又成为自然选择。反过来，更好的 Artifact 会产生新数据和反馈，继续喂给 Model 学习。</p>
+              <p><strong>所以未来方向不是选边站，而是让三个循环互相供能。</strong></p>
+            </div>
+            <div class="flywheel" role="img" aria-label="Model、Harness、Artifact 相互促进的共同进化飞轮">
+              <div class="fly-node model">更强 Model</div>
+              <div class="fly-node harness">更好 Harness</div>
+              <div class="fly-node artifact">更优 Artifact</div>
+              <span class="fly-arrow one">↗</span><span class="fly-arrow two">↘</span><span class="fly-arrow three">↔</span>
+              <div class="fly-center">数据、反馈、工具与搜索能力互相回流</div>
+            </div>
+          </div>
+
+          <h3>抽象层级一直在向上移动</h3>
+          <p>作者用编程工具的演化解释这种趋势：我们逐渐把更多低层对象打包成新的抽象，然后在更高层思考。自进化系统也会从局部模块优化，走向对整个系统的联合改进。</p>
+          <div class="abstraction">
+            <div class="abstract-row"><span class="step">A1</span><b>Words</b><span>人工逐字写代码。</span></div>
+            <div class="abstract-row"><span class="step">A2</span><b>Snippets</b><span>ChatGPT 生成片段。</span></div>
+            <div class="abstract-row"><span class="step">A3</span><b>Functions & Files</b><span>Copilot 承担更完整的局部。</span></div>
+            <div class="abstract-row"><span class="step">A4</span><b>Projects</b><span>Coding Agent 在整个项目上工作。</span></div>
+            <div class="abstract-row"><span class="step">A5</span><b>Evolving Systems</b><span>Model、Harness、Artifact 被视作一个共同优化对象。</span></div>
+          </div>
+        </section>
+
+        <section id="real-world">
+          <span class="section-no">07 · REAL WORLD</span>
+          <h2>别先问它叫什么，先问闭环最后连到哪里</h2>
+          <p class="lead">作者在结尾把分类压缩成三个可复用的问题。它们比术语更能判断一个新系统的能力边界，也能揭示系统最终会优化什么。</p>
+          <div class="three-questions">
+            <div class="question"><span class="question-no">01</span><div><b>What evolves?</b><span class="question-answer">变化的是 Artifact、Harness、Model，还是三者一起？</span></div></div>
+            <div class="question"><span class="question-no">02</span><div><b>What feedback drives it?</b><span class="question-answer">驱动变化的是基准分数、执行结果、内部置信、自博弈、环境弱信号，还是物理实验？</span></div></div>
+            <div class="question"><span class="question-no">03</span><div><b>Where does the loop close?</b><span class="question-answer">闭环落在 benchmark，得到更强的 benchmark solver；闭环连到代码、科学、工程或物理世界，才会改进真实系统。</span></div></div>
+          </div>
+
+          <div class="conclusion">
+            <p>这篇文章真正希望读者改变的，是判断“自进化”的方式：不要被名称吸引，也不要只看系统有没有自循环。先定位<strong>更新对象</strong>，再追踪<strong>反馈来源</strong>，最后确认<strong>闭环落点</strong>。世界仍是最难的环境，也正是这类系统最值得产生价值的地方。</p>
+          </div>
+
+          <details>
+            <summary>原文提到的代表工作与延伸阅读</summary>
+            <ul>
+              <li><a href="https://arxiv.org/pdf/2506.13131" target="_blank" rel="noopener noreferrer">AlphaEvolve</a>：产物迭代优化。</li>
+              <li><a href="https://hermes-agent.nousresearch.com/docs/user-guide/features/skills" target="_blank" rel="noopener noreferrer">Hermes Agent Skills</a>：自动创建与复用技能。</li>
+              <li><a href="https://arxiv.org/abs/2606.11182" target="_blank" rel="noopener noreferrer">Eevee</a>：多专家 Agent 与不同数据分布。</li>
+              <li><a href="https://arxiv.org/abs/2504.16084" target="_blank" rel="noopener noreferrer">TTRL</a>：利用内部信号训练模型。</li>
+              <li><a href="https://test-time-training.github.io/e2e.pdf" target="_blank" rel="noopener noreferrer">Test-time Training</a>：推理期间的模型更新视角。</li>
+              <li><a href="https://arxiv.org/abs/2302.00487" target="_blank" rel="noopener noreferrer">Continual Learning survey</a>：经典持续学习问题。</li>
+            </ul>
+          </details>
+        </section>
+      </article>
+
+      <footer>
+        <div class="footer-grid">
+          <div>
+            <p><strong>原文</strong><br><a href="https://lsl.zone/blog/2026/a-taxonomy-of-self-evolving-agents/" target="_blank" rel="noopener noreferrer">A Taxonomy of Self-evolving Agents</a><br>Shilong Liu · 2026-07-08 · lsl.zone</p>
+            <p>内容仅依据原文 HTML 全文与原文配图整理，抓取于 2026-07-13。页面实际使用作者的总分类图与 AlphaEvolve 流程图；其余关系图由本页基于原文重新排版，未引入第三方解读。</p>
+            <div class="tags" aria-label="主题标签"><span class="tag">Agent Systems</span><span class="tag">Self-improvement</span><span class="tag">Continual Learning</span><span class="tag">Automated Discovery</span></div>
+          </div>
+          <div>
+            <p><strong>阅读路径</strong><br>先用三元框架定位变化对象，再比较三种反馈闭环，最后理解为什么成熟系统会走向联合进化。</p>
+            <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh">
+              <span class="production-label">制作信息</span>
+              <span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span>
+              <span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span>
+            </p>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc" aria-label="文章目录">
+      <div class="toc-label">READING MAP</div>
+      <a href="#frame">三个可变位置</a>
+      <a href="#taxonomy">三类闭环对照</a>
+      <a href="#artifact">产物迭代优化</a>
+      <a href="#harness">Harness 自改进</a>
+      <a href="#model">模型学习</a>
+      <a href="#boundary">边界与共同进化</a>
+      <a href="#real-world">闭环连到现实</a>
+    </aside>
+  </div>
+
+  <script>
+    const taxonomy = {
+      artifact: {
+        heading: "产物迭代优化",
+        source: "评估器 / 环境结果",
+        center: "Artifact · 产物",
+        result: "更优候选进入下一轮",
+        feedback: "候选方案 → 评估 → 保留反馈 → 再生成",
+        definition: "人类定义目标与评估标准，Agent 反复提出、检验并改写外部产物。系统看起来在“自进化”，但直接被优化的是输出，不一定是 Agent 自身。",
+        change: "算法、代码、论文、科学发现、机器人策略等 Artifact",
+        signal: "明确评估标准、执行结果、模拟器或实验环境反馈",
+        weights: "通常保持不变",
+        close: "被搜索和验证的外部结果",
+        examples: ["AlphaEvolve：算法与科学发现", "FARS：自动研究与论文生成", "NVIDIA ENPIRÉ、LabOS、Qumus：机器人、实验室与材料世界"]
+      },
+      harness: {
+        heading: "Harness 自我改进",
+        source: "任务历史 / 成败经验",
+        center: "Harness · 代理框架",
+        result: "新规则、工具与技能被复用",
+        feedback: "经历与失败 → 抽取经验 → 写回组件 → 下次复用",
+        definition: "模型权重保持固定，Agent 把经验写回自己的提示词、记忆、playbook、工具、技能或专家结构，让部署后的系统在相似任务上变得更可靠。",
+        change: "Prompt、Memory、Tool、Skill、搜索策略、专家与 Router",
+        signal: "任务历史、错误模式、成功轨迹、可复用规则与上下文成本",
+        weights: "保持不变",
+        close: "Agent 自己的运行时组件",
+        examples: ["GEPA、ACE、Mem0：提示词、playbook 与记忆", "Alita、Mem-UI、Hermes Agent：工具与技能", "Eevee、Alita-G：专家化与多 Agent 扩展"]
+      },
+      model: {
+        heading: "无金标准答案的模型学习",
+        source: "伪标签 / 奖励 / 弱信号",
+        center: "Model · 模型权重",
+        result: "更新后的行为产生新数据",
+        feedback: "弱信号 → 伪目标或奖励 → 训练更新 → 新行为",
+        definition: "没有人工金答案时，系统从数据自身、模型内部、自博弈或环境交互中构造学习信号，并真正更新模型参数。",
+        change: "模型权重、推理时内部状态或可训练矩阵",
+        signal: "伪标签、置信分布、奖励、自博弈结果、环境弱反馈",
+        weights: "会更新，这是与 Harness 学习的关键分界",
+        close: "模型的参数与行为分布",
+        examples: ["Self-training、TTRL、DeepSeek-R1：伪标签、内部信号与奖励", "SPIN、Absolute Zero：自博弈", "TTT、Continual Learning：推理期更新与持续数据流"]
+      }
+    };
+
+    const tabs = [...document.querySelectorAll('.lab-tab')];
+    const panel = document.getElementById('lab-panel');
+    function selectTaxonomy(kind) {
+      const data = taxonomy[kind];
+      tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.kind === kind)));
+      panel.setAttribute('aria-labelledby', `tab-${kind}`);
+      document.getElementById('loop-circuit').dataset.kind = kind;
+      document.getElementById('loop-source').textContent = data.source;
+      document.getElementById('loop-center').textContent = data.center;
+      document.getElementById('loop-result').textContent = data.result;
+      document.getElementById('loop-feedback').textContent = data.feedback;
+      document.getElementById('lab-title').textContent = data.heading;
+      document.getElementById('lab-definition').textContent = data.definition;
+      document.getElementById('lab-change').textContent = data.change;
+      document.getElementById('lab-signal').textContent = data.signal;
+      document.getElementById('lab-weights').textContent = data.weights;
+      document.getElementById('lab-close').textContent = data.close;
+      document.getElementById('lab-examples').innerHTML = data.examples.map((item) => `<li>${item}</li>`).join('');
+    }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => selectTaxonomy(tab.dataset.kind));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        const offset = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
+        const next = tabs[(index + offset + tabs.length) % tabs.length];
+        next.focus();
+        selectTaxonomy(next.dataset.kind);
+      });
+    });
+
+    const progress = document.getElementById('progress');
+    const tocLinks = [...document.querySelectorAll('.toc a')];
+    const sections = tocLinks.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    function updateReadingState() {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      progress.style.width = `${max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0}%`;
+      let current = sections[0]?.id;
+      sections.forEach((section) => { if (section.getBoundingClientRect().top <= 150) current = section.id; });
+      tocLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${current}`));
+    }
+    updateReadingState();
+    window.addEventListener('scroll', updateReadingState, { passive: true });
+    window.addEventListener('resize', updateReadingState);
+  </script>
+</body>
+</html>
