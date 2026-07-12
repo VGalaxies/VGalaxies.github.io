@@ -48,14 +48,6 @@
       line-height: 1.78;
       -webkit-font-smoothing: antialiased;
     }
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: -1;
-      background: linear-gradient(90deg, transparent 0, transparent calc(50% - 570px), rgba(173, 56, 45, .16) calc(50% - 570px), rgba(173, 56, 45, .16) calc(50% - 568px), transparent calc(50% - 568px));
-    }
     a { color: var(--accent-dark); text-underline-offset: .22em; text-decoration-thickness: 1px; }
     a:hover { color: var(--accent); }
     img { display: block; width: 100%; height: auto; }
@@ -271,7 +263,6 @@
     .footer-note { color: var(--muted); font-size: .78rem; }
 
     @media (max-width: 920px) {
-      body::before { display: none; }
       .layout { grid-template-columns: 1fr; gap: 0; }
       .toc { display: none; }
       .hero-grid, .lab-stage { grid-template-columns: 1fr; }
