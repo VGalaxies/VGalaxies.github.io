@@ -15,7 +15,7 @@ permalink: /visual-reading/
         <h1>阅读星图</h1>
       </div>
       <div class="vr-catalog-stats" aria-label="目录统计">
-        <strong>{{ site.data.visual_reading.entries.size }}</strong>
+        <strong data-count-to="{{ site.data.visual_reading.entries.size }}">{{ site.data.visual_reading.entries.size }}</strong>
         <span>notes<br>in orbit</span>
       </div>
     </div>

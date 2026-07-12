@@ -16,17 +16,18 @@ title: VGalaxies
       <p class="vr-home-intro">把论文、博客和长文重新拆成可探索的单页笔记。不是摘要仓库，而是一张持续生长的理解地图。</p>
       <div class="vr-home-actions">
         <a class="vr-primary-link" href="{{ '/visual-reading/' | relative_url }}">进入阅读星图 <span aria-hidden="true">↗</span></a>
-        <span class="vr-home-count"><strong>{{ site.data.visual_reading.entries.size }}</strong> notes in orbit</span>
+        <span class="vr-home-count"><strong data-count-to="{{ site.data.visual_reading.entries.size }}">{{ site.data.visual_reading.entries.size }}</strong> notes in orbit</span>
       </div>
     </div>
 
     <div class="vr-orbit" aria-hidden="true">
       <div class="vr-orbit-ring vr-orbit-ring-one"></div>
       <div class="vr-orbit-ring vr-orbit-ring-two"></div>
-      <div class="vr-orbit-core">VR</div>
-      <span class="vr-orbit-node vr-orbit-node-a"></span>
-      <span class="vr-orbit-node vr-orbit-node-b"></span>
-      <span class="vr-orbit-node vr-orbit-node-c"></span>
+      <div class="vr-orbit-sweep"></div>
+      <div class="vr-orbit-core"><span>VR</span></div>
+      <div class="vr-orbit-track vr-orbit-track-a"><span class="vr-orbit-node"></span></div>
+      <div class="vr-orbit-track vr-orbit-track-b"><span class="vr-orbit-node"></span></div>
+      <div class="vr-orbit-track vr-orbit-track-c"><span class="vr-orbit-node"></span></div>
       <span class="vr-orbit-label">INDEX / 2026</span>
     </div>
   </section>
