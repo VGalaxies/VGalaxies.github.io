@@ -8,6 +8,17 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: better-tools-made-copilot-code-review-worse
+    title: '更好的工具为什么让 Copilot code review 变差'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Code Review'
+      - 'Developer Tools'
+      - 'Prompt Engineering'
+      - 'GitHub Copilot'
+    source_url: 'https://github.blog/ai-and-ml/github-copilot/better-tools-made-copilot-code-review-worse-heres-how-we-actually-improved-it/'
   - slug: taxonomy-of-self-evolving-agents
     title: '自进化 Agent 到底进化了什么'
     date: 2026-07-13
