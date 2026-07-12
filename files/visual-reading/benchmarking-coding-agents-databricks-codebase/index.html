@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Databricks 内部 coding agent benchmark 中文可视化阅读：如何从真实 PR 构造任务、用隐藏测试闭环评估，并理解模型、harness、任务难度与端到端成本的共同作用。">
+  <meta name="visual-reading-tags" content="Agent Systems, Benchmark, Developer Tools, Evaluation, Software Engineering">
+  <title>评测 Coding Agent，为什么不能只看模型排行榜？</title>
+  <style>
+    :root {
+      --canvas: #f2f0ec;
+      --paper: #fbfaf8;
+      --paper-2: #f0ede8;
+      --paper-deep: #e5e0d9;
+      --ink: #15191f;
+      --ink-soft: #343b44;
+      --muted: #69717a;
+      --line: #d6d1ca;
+      --red: #e43c2f;
+      --red-dark: #a82a22;
+      --red-soft: #f9e7e4;
+      --blue: #245fa5;
+      --blue-soft: #e4edf8;
+      --green: #24744d;
+      --green-soft: #e3f0e8;
+      --shadow: 0 1px 2px rgba(16, 20, 25, .08), 0 18px 50px rgba(16, 20, 25, .07);
+      --radius-sm: 7px;
+      --radius-md: 14px;
+      --radius-lg: 22px;
+      --max: 1200px;
+      --read: 760px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(21, 25, 31, .025) 1px, transparent 1px),
+        var(--canvas);
+      background-size: 100% 34px;
+      font-family: "Avenir Next", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--red-dark); text-underline-offset: .18em; text-decoration-thickness: 1px; }
+    a:hover { color: var(--red); }
+    p { margin: 0 0 1rem; text-wrap: pretty; }
+    strong { font-weight: 760; }
+    img { display: block; max-width: 100%; }
+    button, summary, a { touch-action: manipulation; }
+    button, summary { font: inherit; }
+    button:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--red) 35%, transparent);
+      outline-offset: 3px;
+    }
+    code, .mono, .eyebrow, .kicker, .toc-title, .metric-value, .step-no {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+    .skip-link {
+      position: fixed;
+      top: .5rem;
+      left: .5rem;
+      z-index: 100;
+      padding: .6rem .85rem;
+      color: white;
+      background: var(--ink);
+      border-radius: var(--radius-sm);
+      transform: translateY(-150%);
+      transition: transform 160ms ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+      background: color-mix(in srgb, var(--canvas) 94%, transparent);
+      backdrop-filter: blur(12px);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: .6rem;
+      color: var(--ink);
+      font-weight: 760;
+      text-decoration: none;
+      letter-spacing: -.01em;
+    }
+    .brand-mark { width: 12px; height: 12px; background: var(--red); transform: rotate(45deg); }
+    .top-links { display: flex; align-items: center; gap: .4rem; }
+    .top-link {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 .8rem;
+      color: var(--muted);
+      border-radius: 999px;
+      font-size: .82rem;
+      text-decoration: none;
+    }
+    .top-link.source { color: white; background: var(--ink); }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 214px;
+      gap: 4.25rem;
+      padding: 4.5rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc {
+      position: sticky;
+      top: 5.3rem;
+      align-self: start;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .toc-title {
+      margin: 0 0 .7rem;
+      color: var(--ink-soft);
+      font-size: .68rem;
+      font-weight: 760;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .toc a {
+      display: block;
+      min-height: 38px;
+      padding: .46rem .3rem .46rem .85rem;
+      color: var(--muted);
+      border-left: 1px solid var(--line);
+      text-decoration: none;
+      line-height: 1.4;
+    }
+    .toc a.active { color: var(--red-dark); border-left-color: var(--red); font-weight: 720; }
+
+    .hero {
+      min-height: 620px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(250px, .9fr);
+      gap: 3rem;
+      align-items: center;
+      padding: 1rem 0 5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin-bottom: 1rem;
+      color: var(--red-dark);
+      font-size: .74rem;
+      font-weight: 760;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, .display {
+      font-family: "Iowan Old Style", "Noto Serif SC", "Songti SC", Georgia, serif;
+      text-wrap: balance;
+    }
+    h1 {
+      max-width: 780px;
+      margin: 0 0 1.4rem;
+      font-size: clamp(3rem, 6.7vw, 6.6rem);
+      font-weight: 760;
+      letter-spacing: -.045em;
+      line-height: .98;
+    }
+    .hero-deck {
+      max-width: 680px;
+      margin-bottom: 1.5rem;
+      color: var(--ink-soft);
+      font-size: clamp(1.08rem, 1.8vw, 1.3rem);
+      line-height: 1.68;
+    }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: .45rem 1.1rem; color: var(--muted); font-size: .82rem; }
+    .hero-board {
+      position: relative;
+      min-height: 430px;
+      padding: 1.4rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .hero-board::before {
+      content: "EVAL / 2026";
+      position: absolute;
+      top: 1.2rem;
+      right: 1.3rem;
+      color: var(--muted);
+      font: 700 .65rem/1 "SFMono-Regular", Consolas, monospace;
+      letter-spacing: .13em;
+    }
+    .board-question { margin: 3rem 0 2.2rem; font-size: 1.05rem; font-weight: 720; }
+    .board-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: .7rem;
+      padding: 1rem 0;
+      border-top: 1px solid var(--line);
+    }
+    .board-cell { padding: .7rem; border-radius: var(--radius-sm); background: var(--paper-2); }
+    .board-cell strong { display: block; font-size: 1rem; }
+    .board-cell span { display: block; color: var(--muted); font-size: .76rem; }
+    .board-arrow { color: var(--red); font-weight: 800; }
+    .board-answer {
+      margin-top: 1.1rem;
+      padding: 1rem;
+      color: white;
+      background: var(--ink);
+      border-radius: var(--radius-md);
+      font-size: .92rem;
+    }
+    .board-answer em { color: #ff7b6f; font-style: normal; }
+
+    .section { padding: 5.8rem 0; border-bottom: 1px solid var(--line); scroll-margin-top: 74px; }
+    .section-head { max-width: var(--read); margin-bottom: 2.5rem; }
+    .kicker { margin-bottom: .65rem; color: var(--red-dark); font-size: .7rem; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin: 0 0 1rem; font-size: clamp(2.15rem, 4.3vw, 4.25rem); line-height: 1.06; letter-spacing: -.028em; }
+    h3 { margin: 0 0 .7rem; font-size: clamp(1.28rem, 2vw, 1.68rem); line-height: 1.28; }
+    .lead { max-width: var(--read); color: var(--ink-soft); font-size: 1.08rem; line-height: 1.82; }
+    .reading { max-width: var(--read); }
+    .reading ul { padding-left: 1.3rem; }
+    .reading li + li { margin-top: .55rem; }
+
+    .tldr {
+      margin-top: 3.2rem;
+      padding: 2.2rem;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--red);
+      border-radius: var(--radius-md);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .tldr h2 { font-size: clamp(1.8rem, 3vw, 2.8rem); }
+    .tldr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 1.5rem; background: var(--line); border: 1px solid var(--line); }
+    .tldr-item { padding: 1.25rem; background: var(--paper); }
+    .tldr-item b { display: block; margin-bottom: .4rem; font-size: .92rem; }
+    .tldr-item p { margin: 0; color: var(--ink-soft); font-size: .9rem; }
+
+    .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; }
+    .panel { padding: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+    .panel.red { background: var(--red-soft); border-color: #e9c7c2; }
+    .panel.blue { background: var(--blue-soft); border-color: #c8d7ea; }
+    .panel.green { background: var(--green-soft); border-color: #c5dccf; }
+    .panel p:last-child { margin-bottom: 0; }
+    .mini-label { display: block; margin-bottom: .6rem; color: var(--muted); font: 700 .68rem/1.3 "SFMono-Regular", Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; margin: 2rem 0; }
+    .metric { padding: 1.25rem; border-top: 3px solid var(--blue); background: var(--paper); }
+    .metric-value { display: block; margin-bottom: .25rem; font-size: clamp(1.55rem, 3vw, 2.45rem); font-weight: 780; line-height: 1; }
+    .metric-label { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+
+    .figure {
+      margin: 2.7rem 0;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .figure img { width: 100%; height: auto; border-radius: calc(var(--radius-lg) - 8px); }
+    figcaption { padding: 1rem .55rem .35rem; color: var(--ink-soft); font-size: .88rem; }
+    .figure-note { margin-top: .7rem; padding: .8rem 1rem; border-left: 3px solid var(--blue); background: var(--blue-soft); font-size: .86rem; }
+    .figure-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+
+    .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; margin: 2.3rem 0; }
+    .step {
+      position: relative;
+      min-height: 190px;
+      padding: 1.1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--paper);
+    }
+    .step:not(:last-child)::after { content: "→"; position: absolute; right: -.58rem; top: 46%; z-index: 2; color: var(--red); font-weight: 800; }
+    .step-no { display: block; margin-bottom: 1.2rem; color: var(--red-dark); font-size: .7rem; font-weight: 760; }
+    .step b { display: block; margin-bottom: .45rem; line-height: 1.35; }
+    .step p { margin: 0; color: var(--muted); font-size: .81rem; line-height: 1.55; }
+
+    .loop {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .8rem;
+      margin: 2rem 0;
+      counter-reset: eval;
+    }
+    .loop-item { padding: 1.3rem; color: white; background: var(--ink); border-radius: var(--radius-md); }
+    .loop-item::before { counter-increment: eval; content: "0" counter(eval); display: block; margin-bottom: .8rem; color: #ff7a6e; font: 700 .7rem/1 "SFMono-Regular", Consolas, monospace; }
+    .loop-item b { display: block; margin-bottom: .35rem; }
+    .loop-item span { color: #c6cbd1; font-size: .82rem; line-height: 1.55; }
+
+    .callout {
+      margin: 2.2rem 0;
+      padding: 1.6rem;
+      border: 1px solid #e7beb9;
+      border-radius: var(--radius-md);
+      background: var(--red-soft);
+    }
+    .callout h3 { color: var(--red-dark); }
+    .callout p:last-child { margin-bottom: 0; }
+
+    details {
+      margin: 1.2rem 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--paper);
+    }
+    summary { padding: 1rem 1.15rem; cursor: pointer; font-weight: 730; }
+    summary::marker { color: var(--red); }
+    .details-body { padding: 0 1.15rem 1.2rem; color: var(--ink-soft); }
+    .details-body p:last-child, .details-body ul:last-child { margin-bottom: 0; }
+
+    .cost-compare {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 1rem;
+      align-items: stretch;
+      margin: 2rem 0;
+    }
+    .cost-card { padding: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+    .cost-card .name { color: var(--muted); font-size: .8rem; }
+    .cost-card .cost { display: block; margin: .4rem 0; font: 780 2.4rem/1 "SFMono-Regular", Consolas, monospace; }
+    .cost-card .score { font-weight: 730; }
+    .cost-vs { align-self: center; color: var(--red); font-weight: 800; }
+
+    .decision-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; margin: 2rem 0; }
+    .decision { padding: 1.4rem; border-top: 4px solid var(--red); background: var(--paper); box-shadow: 0 1px 0 rgba(0,0,0,.04); }
+    .decision:nth-child(2) { border-top-color: var(--blue); }
+    .decision:nth-child(3) { border-top-color: var(--green); }
+    .decision p { margin: 0; color: var(--ink-soft); font-size: .88rem; }
+
+    .boundary-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; margin-top: 2rem; }
+    .boundary { padding: 1.25rem; border: 1px dashed var(--line); background: color-mix(in srgb, var(--paper) 72%, transparent); }
+    .boundary b { display: block; margin-bottom: .4rem; }
+    .boundary p { margin: 0; color: var(--muted); font-size: .86rem; }
+
+    .footer { padding: 4rem 0 0; color: var(--muted); font-size: .84rem; }
+    .footer-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 2rem; padding-top: 2rem; border-top: 1px solid var(--line); }
+    .source-title { color: var(--ink); font-weight: 730; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .9rem; }
+    .tag { padding: .28rem .58rem; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); background: var(--paper); font-size: .72rem; }
+    .production-meta { --production-surface: var(--paper-2, var(--panel-2, var(--paper-deep, #f4ead7))); --production-ink: var(--ink, #25211c); --production-muted: var(--muted, #6f675d); --production-line: var(--line, #dacdb8); display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 1rem 0 0; }
+    .production-label { color: var(--production-ink); font-weight: 750; margin-right: .1rem; }
+    .production-chip { display: inline-flex; align-items: center; overflow: hidden; border: 1px solid var(--production-line); border-radius: 999px; background: var(--production-surface); }
+    .production-key { padding: .24rem .48rem; color: var(--production-muted); border-right: 1px solid var(--production-line); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; }
+    .production-value { padding: .24rem .56rem; color: var(--production-ink); font-size: .72rem; font-weight: 700; }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .hero-board { min-height: auto; }
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .step:not(:last-child)::after { display: none; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 700px) {
+      body { font-size: 15px; }
+      .top-link:not(.source) { display: none; }
+      .layout { width: min(100% - 1.25rem, var(--max)); padding-top: 2.7rem; }
+      h1 { font-size: clamp(2.8rem, 15vw, 4.7rem); }
+      .hero { gap: 1.7rem; padding-bottom: 3.5rem; }
+      .hero-board { padding: 1rem; }
+      .board-row { grid-template-columns: 1fr; }
+      .board-arrow { transform: rotate(90deg); justify-self: center; }
+      .section { padding: 4.2rem 0; }
+      .tldr { padding: 1.35rem; }
+      .tldr-grid, .split, .figure-pair, .cost-compare, .decision-grid, .boundary-list, .footer-grid { grid-template-columns: 1fr; }
+      .cost-vs { justify-self: center; transform: rotate(90deg); }
+      .flow, .loop { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .figure { padding: .55rem; border-radius: var(--radius-md); }
+      .figure img { border-radius: var(--radius-sm); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"></span>VGalaxies Visual Reading</a>
+      <nav class="top-links" aria-label="页首导航">
+        <a class="top-link" href="#method">评测方法</a>
+        <a class="top-link" href="#results">结果</a>
+        <a class="top-link source" href="https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase" target="_blank" rel="noreferrer">阅读原文 ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout" id="top">
+    <main id="main">
+      <header class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Databricks internal benchmark · visual reading</p>
+          <h1 id="page-title">评测 Coding Agent，为什么不能只看模型排行榜？</h1>
+          <p class="hero-deck">在数百万行真实代码库上，Databricks 得到的答案不是“选出唯一冠军”，而是：<strong>模型、harness、任务难度和端到端成本必须一起测。</strong></p>
+          <p class="hero-meta"><span>2026-07-08</span><span>Vinay Gaba 等 5 位作者</span><span>Databricks Blog</span><span>Benchmark / Evaluation</span></p>
+        </div>
+        <div class="hero-board" aria-label="从单一模型问题转向完整系统问题的示意图">
+          <p class="board-question">真正要回答的，不是：</p>
+          <div class="board-cell"><strong>哪个模型最强？</strong><span>只看一次公开榜单上的分数</span></div>
+          <div class="board-row">
+            <div class="board-cell"><strong>模型</strong><span>能力、推理效率、token 价格</span></div>
+            <span class="board-arrow" aria-hidden="true">×</span>
+            <div class="board-cell"><strong>Harness</strong><span>上下文管理、工具调用、运行轮次</span></div>
+          </div>
+          <div class="board-row">
+            <div class="board-cell"><strong>任务</strong><span>代码库、语言、复杂度、测试</span></div>
+            <span class="board-arrow" aria-hidden="true">→</span>
+            <div class="board-cell"><strong>端到端结果</strong><span>通过率 × 每任务成本</span></div>
+          </div>
+          <p class="board-answer">应该问：对<em>我们的任务</em>，哪组 model + harness 在目标质量下成本最低？</p>
+        </div>
+      </header>
+
+      <section class="tldr" id="tldr" aria-labelledby="tldr-title">
+        <p class="kicker">30 秒读懂</p>
+        <h2 id="tldr-title">TL;DR</h2>
+        <p class="lead">Databricks 把近期真实 PR 转成内部 coding benchmark，用隐藏测试做 pass/fail，并发现四件事：能力有明显分层；开放模型已进入最高层；token 单价不等于任务成本；harness 会显著改变上下文开销和最终成本。</p>
+        <div class="tldr-grid">
+          <div class="tldr-item"><b>问题</b><p>公开 benchmark 会逐渐泄漏进训练数据，也不能代表 Databricks 横跨 10+ 语言与多类服务的代码库。</p></div>
+          <div class="tldr-item"><b>方法</b><p>从人工编写、带高质量测试的近期 PR 构造任务；移除解法提示，隐藏测试，逐样本人工复核。</p></div>
+          <div class="tldr-item"><b>核心答案</b><p>没有一个供应商或单一工具统治整个成本—质量前沿；日常任务应按难度路由，而不是默认使用最贵模型。</p></div>
+          <div class="tldr-item"><b>边界</b><p>这是内部且“并不全面”的 benchmark；公开文章没有披露样本量、完整任务集与置信区间，不能当作通用总榜。</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="problem" aria-labelledby="problem-title">
+        <div class="section-head">
+          <p class="kicker">01 / Why local evidence</p>
+          <h2 id="problem-title">公开排行榜回答不了“我们的代码能不能改对”</h2>
+          <p class="lead">SWE-Bench、TerminalBench 仍然有价值，但 Databricks 要做的是工程部署决策：在自己的语言栈、构建系统、约定和测试上，哪组 agent 真正可靠且划算。</p>
+        </div>
+        <div class="split">
+          <article class="panel red">
+            <span class="mini-label">Public benchmark</span>
+            <h3>可比较，但会逐渐脱离现场</h3>
+            <p>任务公开后，解法可能进入后续训练数据；同时，统一数据集难以覆盖某家公司特有的语言组合、服务边界和构建约束。</p>
+          </article>
+          <article class="panel blue">
+            <span class="mini-label">Internal benchmark</span>
+            <h3>难共享，但更接近部署决策</h3>
+            <p>Databricks 的代码库跨越 10+ 种语言与多类服务，包括 Scala、Go、Rust、Java、Python、Bazel、Protobuf 等。真实 PR 更接近工程师日常会交给 agent 的任务分布。</p>
+          </article>
+        </div>
+        <div class="reading" style="margin-top: 2rem">
+          <p>关键转换是：<strong>benchmark 不再只是测模型“会不会写代码”，而是测完整工作系统能否在一个具体代码库中复现开发者意图。</strong>因此，模型能力、工具外壳、上下文管理和测试质量都进入了被评估对象。</p>
+        </div>
+      </section>
+
+      <section class="section" id="workload" aria-labelledby="workload-title">
+        <div class="section-head">
+          <p class="kicker">02 / Workload portrait</p>
+          <h2 id="workload-title">工程师交给 agent 的任务，大多数并不是“最难档”</h2>
+          <p class="lead">Unity AI Gateway 的交互日志让团队先看到真实需求分布：61.1% 属于中等复杂度，只有 12.1% 被归为高复杂度。这直接挑战了“所有任务默认最贵模型”的习惯。</p>
+        </div>
+        <div class="metrics" aria-label="编码代理任务复杂度分布">
+          <div class="metric"><span class="metric-value">7.6%</span><span class="metric-label">Trivial<br>极简单任务</span></div>
+          <div class="metric"><span class="metric-value">19.3%</span><span class="metric-label">Low<br>低复杂度</span></div>
+          <div class="metric"><span class="metric-value">61.1%</span><span class="metric-label">Medium<br>中等复杂度</span></div>
+          <div class="metric"><span class="metric-value">12.1%</span><span class="metric-label">High<br>高复杂度</span></div>
+        </div>
+        <figure class="figure">
+          <img src="imgs/task-complexity.png" alt="Databricks 工程师编码代理会话按任务复杂度划分：7.6% 极简单、19.3% 低、61.1% 中、12.1% 高" loading="lazy" width="1182" height="472">
+          <figcaption><strong>原文任务分布。</strong>它证明的不是“小模型足够”，而是任务难度高度不均匀，因此统一默认到最昂贵模型会留下明显的路由优化空间。</figcaption>
+        </figure>
+        <div class="reading">
+          <p>简单的配置更新、开关调整，与深入的设计探索并不需要同一档推理能力。作者据此认为，应把更多日常工作推向 Haiku 与 GPT-5.4 Mini 这一类较便宜的能力档，同时保留更强模型处理真正困难的任务。</p>
+        </div>
+      </section>
+
+      <section class="section" id="method" aria-labelledby="method-title">
+        <div class="section-head">
+          <p class="kicker">03 / Task construction</p>
+          <h2 id="method-title">一个合格任务，是从真实 PR 中“拿走答案，留下意图”</h2>
+          <p class="lead">合并过的 PR 天然包含开发意图、迭代痕迹、人类 review 和可执行测试。但它不能直接成为 benchmark：必须过滤样本、重写 prompt、隔离测试，并人工确认替代实现也能得到公平评价。</p>
+        </div>
+        <div class="flow" aria-label="从真实 pull request 构造评测任务的五个步骤">
+          <article class="step"><span class="step-no">01 / SOURCE</span><b>近期已合并 PR</b><p>让任务反映当前框架、模式和工程约定。</p></article>
+          <article class="step"><span class="step-no">02 / FILTER</span><b>筛掉非人工改动</b><p>排除 bot、服务账号、全 AI 生成和自动生成改动。</p></article>
+          <article class="step"><span class="step-no">03 / SPEC</span><b>只保留目标与约束</b><p>理解 PR 意图，删除具体解法与“为什么这个修复正确”的提示。</p></article>
+          <article class="step"><span class="step-no">04 / HOLDOUT</span><b>把测试从工作区拿走</b><p>非测试文件成为 agent 要复现的改动，相关测试留到最终判分。</p></article>
+          <article class="step"><span class="step-no">05 / REVIEW</span><b>每个样本人工复核</b><p>必要时重写测试或任务描述，避免过度限定唯一实现。</p></article>
+        </div>
+        <div class="split">
+          <article class="panel">
+            <span class="mini-label">Candidate filters</span>
+            <h3>进入 benchmark 前的五道门</h3>
+            <ul>
+              <li>近期改动，代表当前开发方式；</li>
+              <li>人类编写，而非 bot 或自动生成；</li>
+              <li>有高质量测试可验证结果；</li>
+              <li>改动集中在少量模块，任务自包含；</li>
+              <li>覆盖典型全栈任务与多语言技术栈。</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <span class="mini-label">Prompt discipline</span>
+            <h3>描述“要什么”，不泄漏“怎么做”</h3>
+            <p>团队通常会重写原 PR 描述：明确问题、目标和约束，但去掉方案说明。否则，agent 只是沿着人类已经写出的推理复述答案，任务难度会被系统性低估。</p>
+          </article>
+        </div>
+        <figure class="figure">
+          <img src="imgs/test-before-after.png" alt="测试改写前后对比：改写前要求摘要字符串逐字匹配，改写后分别检查结果数量与排序行为" loading="lazy" width="1564" height="728">
+          <figcaption><strong>原文最重要的具体例子。</strong>旧测试把“正确”绑定到一条精确字符串；新测试改为检查数量与排序行为。这样，agent 可以给出不同实现，只要行为满足意图就能通过。</figcaption>
+          <p class="figure-note">这张图解释了为什么 benchmark 的测试本身也需要 review：对非确定性输出做逐字匹配，会把合理解法误判为失败。</p>
+        </figure>
+        <details>
+          <summary>深读：一个任务最终保留与隐藏了什么？</summary>
+          <div class="details-body">
+            <p><strong>保留：</strong>目标、问题背景、必要约束、标准开发工具，以及 PR 触及代码所依赖的完整测试目标。</p>
+            <p><strong>隐藏：</strong>原 PR 的非测试实现、相关测试文件、解释具体修复为何正确的文字，以及任何会直接指向解法的描述。</p>
+            <p><strong>人工修订：</strong>如果测试只允许一种写法，或 prompt 不足以唯一说明期望行为，团队会在不使用 AI 的情况下修改测试与描述。</p>
+          </div>
+        </details>
+      </section>
+
+      <section class="section" id="evaluation" aria-labelledby="evaluation-title">
+        <div class="section-head">
+          <p class="kicker">04 / Evaluation loop</p>
+          <h2 id="evaluation-title">不问 LLM “看起来对不对”，直接把测试补回来运行</h2>
+          <p class="lead">模型与 harness 使用开箱即用的标准配置，并获得 Databricks 工程师通常拥有的工具。agent 明确表示完成后，系统才冻结代码、恢复隐藏测试并判定 pass/fail。</p>
+        </div>
+        <div class="loop" aria-label="评测闭环的四个步骤">
+          <div class="loop-item"><b>运行 agent</b><span>标准 harness、标准模型设置、常用工程工具。</span></div>
+          <div class="loop-item"><b>等待其声明完成</b><span>让 agent 自己决定何时停止，而不是外部挑选最佳中间状态。</span></div>
+          <div class="loop-item"><b>Checkpoint 代码</b><span>冻结 agent 最终提交的工作区状态。</span></div>
+          <div class="loop-item"><b>恢复测试并执行</b><span>隐藏测试通过才算该 model + harness 组合完成任务。</span></div>
+        </div>
+        <div class="split">
+          <article class="panel green">
+            <span class="mini-label">Correctness signal</span>
+            <h3>可执行测试，而不是 LLM judge</h3>
+            <p>作者明确不用 LLM judge 判正确性，因为他们观察到这种判断会奖励“说得像对的”，而不是代码实际上做对了。</p>
+          </article>
+          <article class="panel blue">
+            <span class="mini-label">Fairness choice</span>
+            <h3>比较开箱即用的完整工具</h3>
+            <p>这更接近工程师真实采用时的默认体验，但也意味着结果同时反映模型与 harness 的默认策略，而不只是基础模型能力。</p>
+          </article>
+        </div>
+        <aside class="callout" aria-labelledby="leak-title">
+          <span class="mini-label">Contamination incident</span>
+          <h3 id="leak-title">第一次分数“好得不真实”：答案藏在 Git 历史里</h3>
+          <p>所有任务都来自已经合并的 commit。早期设置中，agent 可以用 shell 沿 Git history 向前找到原始实现。团队在人工检查轨迹后发现了这个泄漏，并在每次运行期间把工作副本与仓库历史彻底切断。</p>
+          <p><strong>这个插曲比某个分数更重要：</strong>coding agent 不只是读 prompt，它会主动探索整个工具环境；因此 contamination control 必须覆盖 shell、版本历史与工作区边界。</p>
+        </aside>
+        <details>
+          <summary>深读：这个协议能证明什么、不能证明什么？</summary>
+          <div class="details-body">
+            <p>它能较强地回答：在给定默认配置和工具环境下，某个 model + harness 是否能独立重建满足现有测试的改动。</p>
+            <p>它不能单独证明：代码可维护性、未覆盖行为、长期架构质量，或经过深度定制后的 harness 上限。测试质量仍然决定了 pass 的含义。</p>
+          </div>
+        </details>
+      </section>
+
+      <section class="section" id="results" aria-labelledby="results-title">
+        <div class="section-head">
+          <p class="kicker">05 / Results</p>
+          <h2 id="results-title">四个结果，把“选模型”改写成“设计一套决策系统”</h2>
+          <p class="lead">作者更关注稳定的主题模式，而不是相差一两分的名次：成本—质量前沿由多家供应商共同组成，能力形成分层，开放模型进入高能力区，token 单价与端到端成本脱钩，而 harness 本身足以改变效率。</p>
+        </div>
+
+        <div class="reading">
+          <p class="kicker">Finding 1</p>
+          <h3>成本—质量前沿不是一条“单厂商曲线”</h3>
+          <p>图中的红色虚线是 Pareto frontier：在某个成本水平上，没有其他组合能同时更便宜又更高质量。前沿上同时出现 OpenAI、Anthropic 与开放模型组合，因此不存在一个工具在所有预算点都占优。</p>
+        </div>
+        <figure class="figure">
+          <img src="imgs/pareto.png" alt="Databricks benchmark 的每任务平均成本与总体通过率散点图，红色虚线标出由多个模型和 harness 组合构成的 Pareto 前沿" loading="lazy" width="1840" height="1200">
+          <figcaption><strong>原文 Figure 1：每任务成本 vs. 总体通过率。</strong>正确读法不是寻找最右上角的单点，而是沿红色前沿选择符合当前质量目标与预算的组合。</figcaption>
+          <p class="figure-note">图上同一模型以不同 harness 或 effort 出现多个点，也说明“模型名”不是足够细的决策单位。</p>
+        </figure>
+
+        <div class="reading">
+          <p class="kicker">Finding 2</p>
+          <h3>模型形成能力档位，开放模型已经进入最高层</h3>
+          <p>整体结果聚成三个粗略 capability tier。高档模型覆盖更广但昂贵；中低档仍能有效处理大量常见任务。Databricks 特别指出，GLM 5.2 位于最高能力层，在质量上与 Opus 4.8 被描述为统计上持平，但每任务成本是 <strong>$1.28 vs. $1.94</strong>。</p>
+        </div>
+        <figure class="figure">
+          <img src="imgs/capability-tiers.png" alt="Databricks benchmark 的三个能力层：总体通过率约 82% 到 90%、71% 到 82%、51% 到 60%，不同模型和 harness 分布其中" loading="lazy" width="2194" height="1200">
+          <figcaption><strong>原文 Figure 2：三个能力层。</strong>分层的用途不是给模型贴永久标签，而是为任务路由提供粗粒度选择空间：常规工作可以先落到较便宜的层，困难任务再升级。</figcaption>
+        </figure>
+
+        <div class="reading">
+          <p class="kicker">Finding 3</p>
+          <h3>Token 单价便宜，不代表一次任务更便宜</h3>
+          <p>推理效率不同，会让低单价模型工作更久、读取更多内容。原文的对比很反直觉：Sonnet 5 每 token 约比 Opus 4.8 便宜 1.7×，但在这些任务上反而花费更多、通过率更低。</p>
+        </div>
+        <div class="cost-compare" aria-label="Sonnet 5 与 Opus 4.8 的任务成本和通过率比较">
+          <article class="cost-card">
+            <span class="name">Sonnet 5</span>
+            <span class="cost">$2.09</span>
+            <span class="score">81% task completion</span>
+            <p>token 单价更低，但工作更久、读取更多。</p>
+          </article>
+          <span class="cost-vs" aria-hidden="true">VS</span>
+          <article class="cost-card">
+            <span class="name">Opus 4.8</span>
+            <span class="cost">$1.94</span>
+            <span class="score">87% task completion</span>
+            <p>每 token 更贵，但端到端更省，且高 6 个百分点。</p>
+          </article>
+        </div>
+        <div class="reading">
+          <p>作者把差异主要归因于 Sonnet 5 消耗了 <strong>1.9× 更多 token</strong>。因此，真正需要优化的是 <em>price per solved task</em>，而不是静态价目表上的 <em>price per token</em>。</p>
+        </div>
+
+        <div class="reading" style="margin-top: 4rem">
+          <p class="kicker">Finding 4</p>
+          <h3>Harness 不是“包装层”，它会改变 agent 看多少、跑几轮、花多少钱</h3>
+          <p>在相同模型与 thinking effort 下，Pi 与原生 Claude Code / Codex 的每任务成本差异在若干比较中达到 1.20×–2.08×；质量差通常较小，但并非每个设置都完全相同。原文把主要机制指向上下文管理。</p>
+        </div>
+        <figure class="figure">
+          <img src="imgs/harness-impact.png" alt="相同模型和 effort 在 Pi harness 与原生 harness 下的每任务成本哑铃图，Pi 在所示比较中便宜 1.20 倍到 2.08 倍" loading="lazy" width="2663" height="1322">
+          <figcaption><strong>原文 harness 成本对比。</strong>红点为 Pi，空心点为原生 harness。图中大多数质量差只有几个百分点，但成本间距可以很大；同时，max effort 的某组比较也提醒读者：更便宜并不自动等于质量不变。</figcaption>
+        </figure>
+        <figure class="figure">
+          <img src="imgs/context-per-task.png" alt="每任务重新馈入模型的总上下文中位数：Opus 4.8 在 Claude Code 为 742k token、Pi 为 236k；GPT-5.5 在 Codex 为 1235k、Pi 为 665k" loading="lazy" width="1712" height="672">
+          <figcaption><strong>效率差异的机制线索。</strong>在图示比较中，Pi 对 Opus 4.8 重新馈入的总上下文少 3.2×，对 GPT-5.5 少 1.9×。更紧的 working set 与更少运行轮次，会直接压低任务级成本。</figcaption>
+        </figure>
+        <details>
+          <summary>深读：为什么不能把这段简化成“Pi 永远更好”？</summary>
+          <div class="details-body">
+            <p>作者明确没有得出“某个 harness 永远更便宜”或“原生 harness 更差”的结论。图中也存在质量变化。更稳妥的 takeaway 是：harness 与模型共同决定有效上下文、工具行为和停止轨迹，因此必须作为一个组合评测。</p>
+            <p>这也是 Databricks 投资 Omnigent、让模型与 harness 可以无缝切换的理由：保持替换能力，才能持续追踪新的 Pareto 前沿。</p>
+          </div>
+        </details>
+      </section>
+
+      <section class="section" id="decisions" aria-labelledby="decisions-title">
+        <div class="section-head">
+          <p class="kicker">06 / Operational takeaway</p>
+          <h2 id="decisions-title">真正的产物不是榜单，而是一套持续路由与替换机制</h2>
+          <p class="lead">Databricks 从“能否更高效使用 coding agent”出发，最后得到的是三个工程决策原则：按难度路由、按任务核算成本、把 model + harness 当作可替换组合。</p>
+        </div>
+        <div class="decision-grid">
+          <article class="decision">
+            <span class="mini-label">Route</span>
+            <h3>按任务难度分配能力</h3>
+            <p>常规配置与小改动优先较便宜能力层；深层设计或困难修复再升级到最强模型。</p>
+          </article>
+          <article class="decision">
+            <span class="mini-label">Measure</span>
+            <h3>按“解决一个任务”计价</h3>
+            <p>把总 token、运行轮次、harness 上下文策略与通过率统一折算到端到端任务成本。</p>
+          </article>
+          <article class="decision">
+            <span class="mini-label">Stay flexible</span>
+            <h3>避免锁定供应商与假设</h3>
+            <p>持续把新模型和新 harness 放回同一内部 benchmark，更新 Pareto 前沿而不是永久固化默认值。</p>
+          </article>
+        </div>
+        <div class="split" style="margin-top: 2.2rem">
+          <article class="panel">
+            <span class="mini-label">For a team</span>
+            <h3>你可能已经拥有 benchmark 原料</h3>
+            <p>作者的建议很直接：任何有已合并 PR backlog 的团队，都已经拥有一批模型尚未训练过、并且由自身测试定义正确性的候选任务。</p>
+          </article>
+          <article class="panel">
+            <span class="mini-label">For a platform</span>
+            <h3>路由器需要本地证据</h3>
+            <p>自动选择最合适模型的前提，不是通用声誉，而是持续收集“任务形状 → 组合表现 → 成本”的内部数据。</p>
+          </article>
+        </div>
+        <div class="reading" style="margin-top: 2rem">
+          <p>这也解释了文章最后强调的“反锁定”：锁定的不只是厂商，还包括“最贵模型总是最好”“token 单价能代表成本”“原生 harness 必然最适配”等未经持续验证的假设。</p>
+        </div>
+      </section>
+
+      <section class="section" id="limits" aria-labelledby="limits-title">
+        <div class="section-head">
+          <p class="kicker">07 / Boundaries</p>
+          <h2 id="limits-title">这是一份强内部证据，不是一张可外推到所有公司的世界总榜</h2>
+          <p class="lead">原文主动说明该练习“并不全面”。它非常适合指导 Databricks 自己的工具选择，但公开文章提供的信息不足以支持对整个行业做稳定、可复现的模型排名。</p>
+        </div>
+        <div class="boundary-list">
+          <article class="boundary"><b>代码库特定</b><p>任务、语言比例、构建系统和测试风格来自 Databricks；其他团队的 Pareto 前沿可能不同。</p></article>
+          <article class="boundary"><b>公开细节有限</b><p>文章没有披露任务样本量、完整任务清单、逐任务结果或完整统计不确定性。</p></article>
+          <article class="boundary"><b>测试定义 pass</b><p>隐藏测试比 LLM judge 更客观，但仍只能覆盖测试表达出的行为；未测属性不会自动被验证。</p></article>
+          <article class="boundary"><b>默认配置快照</b><p>结果描述开箱即用设置下的当时状态；模型、价格与 harness 都会快速变化，需要重复运行。</p></article>
+          <article class="boundary"><b>统计措辞需克制</b><p>文章称 GLM 5.2 与 Opus 4.8 在质量上“统计上持平”，但公开正文没有展示检验方法或区间。</p></article>
+          <article class="boundary"><b>不是单一模型测量</b><p>同一模型在不同 harness 下产生不同轨迹，因此不能把组合结果全部归因于基础模型。</p></article>
+        </div>
+        <details open>
+          <summary>最后应该记住的一句话</summary>
+          <div class="details-body">
+            <p class="display" style="font-size: 1.35rem; line-height: 1.55; color: var(--ink)">不要问“今天最强的 coding model 是谁”；先建立一套能持续回答“对我们的代码和任务，哪种 model + harness 组合最可靠、最经济”的评测系统。</p>
+          </div>
+        </details>
+      </section>
+
+      <footer class="footer">
+        <div class="footer-grid">
+          <div>
+            <p class="source-title">原文：Benchmarking Coding Agents on Databricks’ Multi-Million Line Codebase</p>
+            <p>作者：Vinay Gaba、Ankit Mathur、Rishabh Singh、Patrick Wendell、Matei Zaharia。页面内容依据 2026-07-08 发布的 Databricks Blog 全文与原文配图整理；中文流程图为结构化转述。</p>
+            <p><a href="https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase" target="_blank" rel="noreferrer">阅读 Databricks 原文 ↗</a></p>
+            <div class="tag-list" aria-label="主题标签"><span class="tag">Agent Systems</span><span class="tag">Benchmark</span><span class="tag">Developer Tools</span><span class="tag">Evaluation</span><span class="tag">Software Engineering</span></div>
+          </div>
+          <div>
+            <p>这不是外部复现报告，也没有执行独立模型 review。页面保留了原文的内部 benchmark 属性，并把未公开的样本规模、任务明细与统计细节明确列为边界。</p>
+            <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh"><span class="production-label">制作信息</span><span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span><span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span></p>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc" aria-label="页面目录">
+      <p class="toc-title">Reading map</p>
+      <a href="#tldr">TL;DR</a>
+      <a href="#problem">为什么自己测</a>
+      <a href="#workload">真实任务长什么样</a>
+      <a href="#method">任务如何构造</a>
+      <a href="#evaluation">怎样判定通过</a>
+      <a href="#results">四组关键结果</a>
+      <a href="#decisions">如何用于决策</a>
+      <a href="#limits">边界与限制</a>
+    </aside>
+  </div>
+
+  <script>
+    const sections = [...document.querySelectorAll('main section[id]')];
+    const tocLinks = [...document.querySelectorAll('.toc a')];
+    const byId = new Map(tocLinks.map(link => [link.getAttribute('href').slice(1), link]));
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      tocLinks.forEach(link => link.classList.remove('active'));
+      byId.get(visible.target.id)?.classList.add('active');
+    }, { rootMargin: '-22% 0px -62% 0px', threshold: [0, .2, .5] });
+    sections.forEach(section => observer.observe(section));
+  </script>
+</body>
+</html>

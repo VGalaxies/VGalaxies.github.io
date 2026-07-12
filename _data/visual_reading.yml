@@ -8,6 +8,17 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: benchmarking-coding-agents-databricks-codebase
+    title: '评测 Coding Agent，为什么不能只看模型排行榜'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Benchmark'
+      - 'Developer Tools'
+      - 'Evaluation'
+      - 'Software Engineering'
+    source_url: 'https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase'
   - slug: dspark-confidence-scheduled-speculative-decoding-gpt-refined
     title: 'DSpark：草稿不是越长越快，关键是验证哪些 token'
     date: 2026-07-12
