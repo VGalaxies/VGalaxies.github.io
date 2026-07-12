@@ -8,6 +8,16 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: neural-architecture-as-lagrangian-constraints
+    title: '为什么神经网络能容纳这么多架构'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Neural Networks'
+      - 'Architecture'
+      - 'Attention'
+      - 'Numerical Methods'
+    source_url: 'https://x.com/BetaTomorrow/status/2037682795355762727'
   - slug: understanding-is-the-new-bottleneck
     title: 'Agent 写得越快，人为什么越需要理解代码'
     date: 2026-07-13

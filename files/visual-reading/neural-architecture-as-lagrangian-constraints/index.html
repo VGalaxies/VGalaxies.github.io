@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deep Manifold《Mathematical Considerations for Neural Network Architecture》中文可视化阅读笔记：把模型架构理解为神经固定点拉格朗日中的约束结构，并附 MHA、GQA、MLA、稀疏注意力与混合架构的严格约束写法。">
+  <meta name="visual-reading-tags" content="Neural Networks, Architecture, Attention, Numerical Methods">
+  <title>为什么神经网络能容纳这么多架构？</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;650;750&family=Noto+Serif+SC:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <style>
+    :root {
+      --canvas: #f2f0e9;
+      --paper: #fbfaf5;
+      --paper-2: #ece9df;
+      --panel-2: #e4e8e8;
+      --paper-deep: #d9d6ca;
+      --ink: #14243b;
+      --ink-soft: #33445a;
+      --muted: #68717a;
+      --line: #c8c7bf;
+      --accent: #ad382d;
+      --accent-dark: #7f261f;
+      --blue: #245a78;
+      --blue-soft: #dce7eb;
+      --green: #47715c;
+      --shadow: 0 18px 48px rgba(20, 36, 59, .075);
+      --max: 1160px;
+      --read: 760px;
+      --r-sm: 6px;
+      --r-md: 12px;
+      --r-lg: 20px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(20, 36, 59, .025) 1px, transparent 1px),
+        var(--canvas);
+      background-size: 100% 28px;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
+      background: linear-gradient(90deg, transparent 0, transparent calc(50% - 570px), rgba(173, 56, 45, .16) calc(50% - 570px), rgba(173, 56, 45, .16) calc(50% - 568px), transparent calc(50% - 568px));
+    }
+    a { color: var(--accent-dark); text-underline-offset: .22em; text-decoration-thickness: 1px; }
+    a:hover { color: var(--accent); }
+    img { display: block; width: 100%; height: auto; }
+    button, summary, a { touch-action: manipulation; }
+    button, summary { font: inherit; }
+    :focus-visible { outline: 3px solid rgba(173, 56, 45, .3); outline-offset: 3px; }
+    p { margin: .9rem 0; max-width: 74ch; text-wrap: pretty; }
+    strong { font-weight: 750; }
+    code, .mono, .kicker, .section-no, .toc, .tag, .term-label, .figure-label, .production-key {
+      font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    }
+    .skip-link {
+      position: fixed;
+      top: .5rem;
+      left: .5rem;
+      z-index: 100;
+      padding: .6rem .85rem;
+      color: #fff;
+      background: var(--ink);
+      border-radius: var(--r-sm);
+      transform: translateY(-160%);
+      transition: transform 150ms ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(242, 240, 233, .96);
+      border-bottom: 1px solid rgba(20, 36, 59, .13);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 2rem));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand { color: var(--ink); font-family: "Noto Serif SC", serif; font-weight: 800; text-decoration: none; }
+    .top-actions { display: flex; align-items: center; gap: .55rem; }
+    .top-actions a { min-height: 38px; display: inline-flex; align-items: center; padding: 0 .75rem; font-size: .8rem; text-decoration: none; }
+    .source-button { color: #fff !important; background: var(--ink); border-radius: 999px; }
+    .progress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: var(--accent); }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 210px;
+      gap: 4.5rem;
+      padding: 4rem 0 6rem;
+    }
+    main { min-width: 0; }
+    .toc { position: sticky; top: 5.1rem; align-self: start; color: var(--muted); font-size: .76rem; }
+    .toc strong { display: block; margin-bottom: .65rem; color: var(--ink); letter-spacing: .1em; }
+    .toc a { display: block; padding: .48rem .55rem; color: var(--muted); border-left: 2px solid var(--line); text-decoration: none; line-height: 1.45; }
+    .toc a:hover, .toc a.active { color: var(--accent-dark); border-color: var(--accent); }
+
+    .hero { position: relative; padding: 1rem 0 4.6rem; border-bottom: 1px solid var(--line); }
+    .kicker { margin: 0 0 1.1rem; color: var(--accent-dark); font-size: .74rem; font-weight: 600; letter-spacing: .09em; }
+    h1, h2, h3, .thesis, .pullquote { font-family: "Noto Serif SC", "Songti SC", serif; text-wrap: balance; }
+    h1 { max-width: 870px; margin: 0; font-size: clamp(3rem, 7.1vw, 6.7rem); line-height: .99; letter-spacing: -.035em; font-weight: 800; }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.16fr) minmax(260px, .84fr); gap: 3.2rem; align-items: end; margin-top: 2.2rem; }
+    .hero-deck { margin: 0; color: var(--ink-soft); font-size: clamp(1.08rem, 1.8vw, 1.28rem); line-height: 1.72; }
+    .hero-meta { margin-top: 1.2rem; display: flex; flex-wrap: wrap; gap: .55rem 1rem; color: var(--muted); font-size: .82rem; }
+    .hero-sketch { position: relative; min-height: 285px; border: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); overflow: hidden; }
+    .hero-sketch::after { content: "ARCHITECTURE = CONSTRAINT"; position: absolute; right: -2.4rem; bottom: 1.9rem; color: rgba(173, 56, 45, .16); font: 600 1.05rem "IBM Plex Mono", monospace; transform: rotate(-90deg); }
+    .sketch-boundary { position: absolute; inset: 35px 52px; border: 3px solid var(--accent); border-radius: 47% 53% 42% 58% / 48% 38% 62% 52%; transform: rotate(-7deg); }
+    .sketch-path { position: absolute; width: 64%; height: 44%; left: 17%; top: 29%; border-top: 2px dashed var(--blue); border-radius: 50%; transform: rotate(13deg); }
+    .sketch-dot { position: absolute; width: 13px; height: 13px; border: 3px solid var(--paper); border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+    .d1 { left: 24%; top: 58%; } .d2 { left: 46%; top: 39%; } .d3 { left: 68%; top: 54%; background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .sketch-note { position: absolute; left: 1rem; top: .8rem; color: var(--muted); font: 500 .7rem "IBM Plex Mono", monospace; }
+    .sketch-fixed { position: absolute; right: 1.1rem; top: 47%; color: var(--accent-dark); font: 600 .72rem "IBM Plex Mono", monospace; }
+
+    .thesis { max-width: 930px; margin: 3.4rem 0 0; padding: 1.5rem 0 1.7rem 1.4rem; border-left: 4px solid var(--accent); font-size: clamp(1.35rem, 2.55vw, 2rem); line-height: 1.56; }
+    .thesis em { color: var(--accent-dark); font-style: normal; }
+
+    section { margin: 5.2rem 0; scroll-margin-top: 5rem; }
+    .section-head { max-width: var(--read); margin-bottom: 1.5rem; }
+    .section-no { display: block; margin-bottom: .6rem; color: var(--accent); font-size: .73rem; font-weight: 600; letter-spacing: .1em; }
+    h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.17; letter-spacing: -.018em; }
+    h3 { margin: 2rem 0 .55rem; font-size: 1.3rem; line-height: 1.4; }
+    .lead { color: var(--ink-soft); font-size: 1.07rem; }
+    .read-column { max-width: var(--read); }
+
+    .tldr { margin-top: 2.2rem; display: grid; grid-template-columns: 145px minmax(0, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+    .tldr-label { padding: 1.2rem 1rem 1.2rem 0; color: var(--accent-dark); font: 600 .75rem "IBM Plex Mono", monospace; letter-spacing: .08em; }
+    .tldr-body { padding: 1rem 0 1rem 1.35rem; border-left: 1px solid var(--line); }
+    .tldr-body p { margin: .35rem 0; }
+
+    .equation-panel { margin: 2rem 0; padding: 2rem; background: var(--ink); color: #f5f4ee; box-shadow: var(--shadow); }
+    .equation-main { overflow-x: auto; padding: .55rem 0 1rem; font-size: clamp(1.05rem, 2.5vw, 1.6rem); text-align: center; }
+    .equation-main .katex { color: #fff; }
+    .term-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 1rem; background: rgba(255,255,255,.17); }
+    .term { min-height: 150px; padding: 1rem; background: var(--ink); }
+    .term-label { display: block; margin-bottom: .45rem; color: #e59a91; font-size: .72rem; }
+    .term strong { display: block; margin-bottom: .3rem; color: #fff; }
+    .term p { margin: 0; color: #c9d0d7; font-size: .87rem; line-height: 1.6; }
+    .equation-caption { margin: .9rem 0 0; color: #aab5c1; font-size: .8rem; text-align: center; }
+
+    .logic-chain { margin: 2.1rem 0; display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: var(--paper); }
+    .logic-step { position: relative; min-height: 155px; padding: 1.05rem; border-right: 1px solid var(--line); }
+    .logic-step:last-child { border-right: 0; }
+    .logic-step:not(:last-child)::after { content: "→"; position: absolute; right: -.55rem; top: 50%; z-index: 2; width: 1.1rem; color: var(--accent); background: var(--paper); font-weight: 800; text-align: center; }
+    .logic-step small { color: var(--accent-dark); font: 600 .68rem "IBM Plex Mono", monospace; }
+    .logic-step strong { display: block; margin: .42rem 0; }
+    .logic-step p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.55; }
+
+    .constraint-lab { margin: 2.3rem 0; padding: 1.4rem; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .lab-head { display: flex; justify-content: space-between; gap: 1rem; align-items: start; margin-bottom: 1rem; }
+    .lab-head h3 { margin: 0; }
+    .lab-head p { margin: .3rem 0 0; color: var(--muted); font-size: .84rem; }
+    .lab-badge { flex: none; color: var(--accent-dark); font: 600 .68rem "IBM Plex Mono", monospace; }
+    .lab-controls { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1rem; }
+    .lab-controls button { min-height: 40px; padding: .48rem .75rem; color: var(--ink-soft); background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+    .lab-controls button[aria-pressed="true"] { color: #fff; background: var(--ink); border-color: var(--ink); }
+    .lab-stage { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(230px, .75fr); gap: 1.2rem; align-items: stretch; }
+    .space-map { position: relative; min-height: 330px; overflow: hidden; background: #e9ecea; border: 1px solid #d3d7d5; }
+    .space-grid { position: absolute; inset: 0; opacity: .32; background-image: linear-gradient(rgba(20,36,59,.17) 1px, transparent 1px), linear-gradient(90deg, rgba(20,36,59,.17) 1px, transparent 1px); background-size: 28px 28px; }
+    .feasible { position: absolute; left: 15%; top: 13%; width: 69%; height: 70%; border: 4px solid var(--accent); border-radius: 42% 58% 57% 43% / 56% 39% 61% 44%; transition: all 380ms cubic-bezier(.2,.8,.2,1); }
+    .route { position: absolute; left: 21%; top: 60%; width: 57%; height: 0; border-top: 3px dashed var(--blue); transform: rotate(-19deg); transform-origin: center; transition: all 380ms ease; }
+    .route::after { content: ""; position: absolute; right: -5px; top: -7px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #e9ecea; }
+    .map-label { position: absolute; left: 1rem; top: .8rem; color: var(--muted); font: 500 .68rem "IBM Plex Mono", monospace; }
+    .map-target { position: absolute; right: 1rem; bottom: 1rem; color: var(--accent-dark); font: 600 .72rem "IBM Plex Mono", monospace; }
+    .lab-copy { padding: 1rem; background: var(--ink); color: #fff; }
+    .lab-copy .mono { color: #e59a91; font-size: .72rem; }
+    .lab-copy h4 { margin: .45rem 0 .6rem; font-family: "Noto Serif SC", serif; font-size: 1.35rem; }
+    .lab-copy p { margin: .55rem 0; color: #cad2da; font-size: .9rem; line-height: 1.65; }
+    .lab-copy strong { color: #fff; }
+    .lab-note { margin: .85rem 0 0; color: var(--muted); font-size: .78rem; }
+
+    .evidence-grid { margin: 2rem 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+    .evidence { padding: 1.2rem; border-top: 4px solid var(--ink); background: var(--paper); }
+    .evidence:nth-child(2) { border-color: var(--accent); }
+    .evidence .figure-label { color: var(--muted); font-size: .68rem; }
+    .evidence h3 { margin: .55rem 0 .65rem; }
+    .evidence p { color: var(--ink-soft); font-size: .91rem; }
+    .claim-level { display: inline-block; margin-top: .4rem; padding: .25rem .5rem; color: var(--accent-dark); background: #f0ded9; font: 600 .67rem "IBM Plex Mono", monospace; }
+
+    figure { margin: 2rem 0; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    figure img { max-height: 720px; object-fit: contain; background: #fff; }
+    figcaption { padding: 1rem 1.1rem 1.15rem; color: var(--ink-soft); font-size: .88rem; }
+    figcaption strong { color: var(--ink); }
+    .figure-wide { width: min(100%, 980px); }
+
+    .numerical-rule { margin: 2rem 0; padding: 1.55rem 1.6rem; color: #fff; background: var(--blue); }
+    .numerical-rule .pullquote { margin: 0; max-width: 870px; font-size: clamp(1.35rem, 2.7vw, 2.15rem); line-height: 1.5; }
+    .numerical-rule p:last-child { margin-bottom: 0; color: #dce8ee; font-size: .86rem; }
+    .criteria { display: grid; grid-template-columns: repeat(3, 1fr); margin: 1.5rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .criterion { padding: 1.1rem; border-right: 1px solid var(--line); }
+    .criterion:last-child { border-right: 0; }
+    .criterion strong { display: block; color: var(--accent-dark); font-size: 1.06rem; }
+    .criterion span { color: var(--muted); font-size: .84rem; }
+
+    .comparison { margin: 2rem 0; overflow-x: auto; }
+    table { width: 100%; min-width: 660px; border-collapse: collapse; background: var(--paper); }
+    th, td { padding: .9rem 1rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font: 600 .72rem "IBM Plex Mono", monospace; letter-spacing: .04em; }
+    td:first-child { width: 24%; font-weight: 750; }
+    td { font-size: .9rem; }
+    .tension { margin: 2rem 0; display: grid; grid-template-columns: 1fr 70px 1fr; align-items: center; }
+    .tension-side { min-height: 230px; padding: 1.25rem; background: var(--paper); border: 1px solid var(--line); }
+    .tension-side h3 { margin: 0 0 .7rem; }
+    .tension-side p { color: var(--ink-soft); font-size: .9rem; }
+    .tension-arrow { color: var(--accent); font-size: 2rem; text-align: center; }
+
+    .boundary-list { margin: 2rem 0; border-top: 1px solid var(--ink); }
+    .boundary-item { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 1.2rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+    .boundary-item strong { color: var(--accent-dark); }
+    .boundary-item p { margin: 0; color: var(--ink-soft); }
+    .takeaway { margin: 3rem 0 0; padding: 1.7rem; background: var(--paper-2); border-left: 4px solid var(--accent); }
+    .takeaway p { margin: 0; font-family: "Noto Serif SC", serif; font-size: 1.22rem; line-height: 1.7; }
+
+    .appendix-shell { margin-top: 2rem; padding: 1.5rem; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .extension-banner { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 1.2rem; margin-bottom: 1.5rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--line); }
+    .extension-banner strong { color: var(--accent-dark); font: 600 .72rem "IBM Plex Mono", monospace; letter-spacing: .06em; }
+    .extension-banner p { margin: 0; color: var(--ink-soft); font-size: .9rem; }
+    .math-foundation { padding: 1.4rem; color: #fff; background: var(--ink); }
+    .math-foundation h3 { margin: 0 0 .65rem; }
+    .math-foundation p { color: #cbd3da; }
+    .math-display { overflow-x: auto; margin: .9rem 0; padding: 1rem; background: rgba(255,255,255,.07); text-align: center; }
+    .math-display .katex { color: inherit; }
+    .math-fallback { font-family: "IBM Plex Mono", monospace; font-size: .88rem; }
+    .pattern-table { margin: 1.5rem 0 2rem; overflow-x: auto; }
+    .pattern-table table { min-width: 720px; box-shadow: none; }
+    .pattern-table td:first-child { width: 18%; color: var(--accent-dark); }
+    .pattern-table td:nth-child(2) { width: 35%; font-family: "IBM Plex Mono", monospace; font-size: .82rem; }
+    .math-case { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 1.4rem; padding: 1.5rem 0; border-top: 1px solid var(--line); }
+    .math-case:last-child { border-bottom: 1px solid var(--line); }
+    .case-name { padding-top: .2rem; }
+    .case-name .mono { display: block; color: var(--accent); font-size: .7rem; }
+    .case-name strong { display: block; margin-top: .35rem; font-family: "Noto Serif SC", serif; font-size: 1.35rem; }
+    .case-body h3 { margin: 0 0 .45rem; font-family: "Noto Sans SC", sans-serif; font-size: 1rem; }
+    .case-body p { color: var(--ink-soft); font-size: .9rem; }
+    .case-formula { overflow-x: auto; margin: .8rem 0; padding: .85rem 1rem; color: var(--ink); background: var(--paper-2); border-left: 3px solid var(--blue); text-align: center; }
+    .case-formula .katex-display { margin: .25rem 0; }
+    .precision-note { margin-top: 1.5rem; padding: 1rem 1.1rem; color: var(--ink-soft); background: var(--panel-2); border-left: 4px solid var(--blue); font-size: .88rem; }
+    .source-pill { display: inline-flex; min-height: 32px; align-items: center; margin-top: .25rem; padding: 0 .62rem; color: var(--accent-dark); border: 1px solid var(--line); border-radius: 999px; font: 600 .67rem "IBM Plex Mono", monospace; text-decoration: none; }
+
+    footer { margin-top: 6rem; padding-top: 2rem; border-top: 1px solid var(--ink); }
+    .source-list { margin: 1rem 0 1.8rem; padding-left: 1.2rem; color: var(--ink-soft); font-size: .88rem; }
+    .tags { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1.2rem 0; }
+    .tag { padding: .25rem .55rem; color: var(--ink-soft); background: var(--paper-2); border: 1px solid var(--line); font-size: .68rem; }
+    .production-meta { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; margin: 1.2rem 0; color: var(--muted); font-size: .75rem; }
+    .production-label { color: var(--ink); font-weight: 750; }
+    .production-chip { display: inline-flex; overflow: hidden; border: 1px solid var(--line); border-radius: 999px; }
+    .production-key { padding: .18rem .45rem; color: var(--muted); background: var(--paper-2); }
+    .production-value { padding: .18rem .55rem; color: var(--ink-soft); background: var(--paper); }
+    .footer-note { color: var(--muted); font-size: .78rem; }
+
+    @media (max-width: 920px) {
+      body::before { display: none; }
+      .layout { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .hero-grid, .lab-stage { grid-template-columns: 1fr; }
+      .hero-sketch { min-height: 250px; }
+      .logic-chain { grid-template-columns: 1fr 1fr; }
+      .logic-step:nth-child(2) { border-right: 0; }
+      .logic-step:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .logic-step::after { display: none; }
+    }
+    @media (max-width: 680px) {
+      .layout { width: min(100% - 1.25rem, var(--max)); padding-top: 2.6rem; }
+      .topbar-inner { width: calc(100% - 1.25rem); }
+      .top-actions a:not(.source-button) { display: none; }
+      h1 { font-size: clamp(2.7rem, 15vw, 4.5rem); }
+      .hero-grid { gap: 2rem; }
+      .tldr { grid-template-columns: 1fr; }
+      .tldr-label { padding-bottom: .2rem; }
+      .tldr-body { padding-left: 0; border-left: 0; }
+      .term-grid, .evidence-grid, .criteria { grid-template-columns: 1fr; }
+      .term { min-height: auto; border-bottom: 1px solid rgba(255,255,255,.15); }
+      .logic-chain { grid-template-columns: 1fr; }
+      .logic-step { border-right: 0; border-bottom: 1px solid var(--line); }
+      .lab-head { display: block; }
+      .lab-badge { display: block; margin-top: .6rem; }
+      .tension { grid-template-columns: 1fr; gap: .7rem; }
+      .tension-arrow { transform: rotate(90deg); }
+      .boundary-item { grid-template-columns: 1fr; gap: .3rem; }
+      .extension-banner, .math-case { grid-template-columns: 1fr; gap: .45rem; }
+      .appendix-shell { padding: 1rem; }
+      .equation-panel { padding: 1.1rem; }
+      section { margin: 4.3rem 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">视觉阅读</a>
+      <nav class="top-actions" aria-label="页面导航">
+        <a href="#boundary">阅读边界</a>
+        <a class="source-button" href="https://x.com/BetaTomorrow/status/2037682795355762727" target="_blank" rel="noopener noreferrer">阅读原帖 ↗</a>
+      </nav>
+    </div>
+    <div class="progress" aria-hidden="true"></div>
+  </header>
+
+  <div class="layout" id="top">
+    <main id="main">
+      <article>
+        <header class="hero">
+          <p class="kicker">DEEP MANIFOLD · CONCEPTUAL ESSAY · 2026-03-27</p>
+          <h1>为什么神经网络能容纳这么多架构？</h1>
+          <div class="hero-grid">
+            <div>
+              <p class="hero-deck">常见答案是工程取舍：省内存、提速度、扩上下文。Deep Manifold 给出一个更底层的数学视角：<strong>架构不是神经方程之外的零件，而是限制系统如何学习的约束。</strong></p>
+              <div class="hero-meta">
+                <span>原文：Mathematical Considerations for Neural Network Architecture</span>
+                <span>作者：Deep Manifold</span>
+                <a href="https://deepmanifold.substack.com/p/neural-fixed-points-lagrangian-and" target="_blank" rel="noopener noreferrer">可访问全文 ↗</a>
+              </div>
+            </div>
+            <div class="hero-sketch" aria-label="可行域、学习路径与固定点的概念图">
+              <span class="sketch-note">parameter space Θ</span>
+              <span class="sketch-boundary"></span>
+              <span class="sketch-path"></span>
+              <span class="sketch-dot d1"></span>
+              <span class="sketch-dot d2"></span>
+              <span class="sketch-dot d3"></span>
+              <span class="sketch-fixed">reachable fixed point</span>
+            </div>
+          </div>
+          <p class="thesis">同一个可学习数值系统，可以被不同的 <em>g(θ)=0</em> 切出不同可行域；MHA、GQA、MLA、稀疏注意力与混合架构，因而可以被读成<strong>不同的约束实现</strong>，而不是彼此无关的发明。</p>
+          <div class="tldr" aria-label="三十秒摘要">
+            <div class="tldr-label">TL;DR / 30 秒</div>
+            <div class="tldr-body">
+              <p><strong>问题：</strong>为什么现代神经网络会出现大量架构与注意力变体？</p>
+              <p><strong>作者答案：</strong>学习目标负责减少固定点残差，架构与数据几何则通过约束项规定哪些参数、耦合、路径和变形可以存在。</p>
+              <p><strong>适用边界：</strong>这是一种统一理解架构多样性的概念框架；原文没有给出具体注意力到约束函数的逐项构造，也没有做性能验证。</p>
+            </div>
+          </div>
+        </header>
+
+        <section id="equation">
+          <div class="section-head">
+            <span class="section-no">01 / THE EQUATION</span>
+            <h2>先把架构放回神经方程内部</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">文章从“神经固定点”的残差出发：系统希望让前向算子作用后的结果接近输入本身，再用拉格朗日项限制什么样的解是允许的。</p>
+          </div>
+          <div class="equation-panel">
+            <div class="equation-main" data-latex="L(\theta,\lambda)=\mathbb{E}_x\lVert f_\theta(x)-x\rVert^2+\lambda g(\theta)">
+              L(θ, λ) = Eₓ‖fθ(x) − x‖² + λg(θ)
+            </div>
+            <div class="term-grid">
+              <div class="term">
+                <span class="term-label">RESIDUAL</span>
+                <strong>系统要减少什么</strong>
+                <p><span class="mono">fθ(x)−x</span> 是固定点残差。训练寻找使残差变小的参数，让计算趋向稳定状态。</p>
+              </div>
+              <div class="term">
+                <span class="term-label">CONSTRAINT</span>
+                <strong>哪些解被允许</strong>
+                <p><span class="mono">g(θ)=0</span> 表示架构或数据约束。归一化、注意力结构、参数化与数据几何都可成为边界条件。</p>
+              </div>
+              <div class="term">
+                <span class="term-label">MULTIPLIER</span>
+                <strong>边界如何生效</strong>
+                <p><span class="mono">λ</span> 让约束进入优化问题；作者据此把架构视为数学系统的一部分，而非训练前的外部包装。</p>
+              </div>
+            </div>
+            <p class="equation-caption">公式按原文记法呈现；这里解释的是作者的概念映射，不额外推导新的定理。</p>
+          </div>
+          <div class="logic-chain" aria-label="从架构选择到可达固定点的因果链">
+            <div class="logic-step"><small>01</small><strong>选择架构</strong><p>注意力、路由、参数共享、稀疏性等结构规则先被确定。</p></div>
+            <div class="logic-step"><small>02</small><strong>改变可行域</strong><p>系统允许的连接、耦合与参数变形不再相同。</p></div>
+            <div class="logic-step"><small>03</small><strong>改变稳定路径</strong><p>训练能沿哪些内在路径收敛、哪些路径被阻断随之变化。</p></div>
+            <div class="logic-step"><small>04</small><strong>改变可达固定点</strong><p>最终能抵达的稳定计算状态也会不同。</p></div>
+          </div>
+          <figure>
+            <img src="imgs/neural-fixed-point.jpg" alt="原文神经网络方程图：先定义固定点残差，再写出带约束项的拉格朗日函数" loading="lazy">
+            <figcaption><strong>原文的数学起点。</strong>上半部分把 <span class="mono">fθ(x)−x</span> 写成原始残差，下半部分加入 <span class="mono">λg(θ)</span>；整篇文章对架构的解释都从这个加法展开。</figcaption>
+          </figure>
+        </section>
+
+        <section id="constraint">
+          <div class="section-head">
+            <span class="section-no">02 / THE FEASIBLE REGION</span>
+            <h2>换一种架构，就是换一块可行域</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">作者的统一视角不是说所有架构都一样，而是说它们都在回答同一个问题：这套数值系统被允许怎样移动、耦合和计算？权重塑造前向算子的几何，约束则划定允许区域。</p>
+            <p>在 Deep Manifold 的表述中，训练也不是在一张静止、光滑的流形上找点，而是在<strong>不断移动、分片堆叠的流形</strong>上推进。架构变化会保留某些稳定路径，也会让另一些路径消失。</p>
+          </div>
+
+          <div class="constraint-lab">
+            <div class="lab-head">
+              <div>
+                <h3>约束切换器</h3>
+                <p>切换常见架构族，观察“可行域—路径—落点”的概念变化。</p>
+              </div>
+              <span class="lab-badge">CONCEPTUAL AID · 非性能模拟</span>
+            </div>
+            <div class="lab-controls" role="group" aria-label="选择架构约束示例">
+              <button type="button" aria-pressed="true" data-mode="mha">MHA</button>
+              <button type="button" aria-pressed="false" data-mode="gqa">GQA</button>
+              <button type="button" aria-pressed="false" data-mode="mla">MLA</button>
+              <button type="button" aria-pressed="false" data-mode="sparse">Sparse</button>
+              <button type="button" aria-pressed="false" data-mode="hybrid">Hybrid</button>
+            </div>
+            <div class="lab-stage">
+              <div class="space-map" aria-hidden="true">
+                <span class="space-grid"></span>
+                <span class="feasible"></span>
+                <span class="route"></span>
+                <span class="map-label">admissible region g(θ)=0</span>
+                <span class="map-target">reachable state</span>
+              </div>
+              <div class="lab-copy" aria-live="polite">
+                <span class="mono" id="lab-code">MODE / MHA</span>
+                <h4 id="lab-title">多头各自保留 Q、K、V 投影</h4>
+                <p id="lab-constraint"><strong>约束变化：</strong>头之间的表示与缓存结构保持较高独立性。</p>
+                <p id="lab-effect"><strong>作者视角：</strong>这规定了一类耦合方式与可达路径；它不是“无约束基线”，而是一个具体的约束实现。</p>
+              </div>
+            </div>
+            <p class="lab-note">图形只帮助理解文章的抽象关系，不表示真实损失面、参数数量、速度或质量排序。</p>
+          </div>
+        </section>
+
+        <section id="evidence">
+          <div class="section-head">
+            <span class="section-no">03 / TWO SUPPORTING VIEWS</span>
+            <h2>两个支撑例子：搜索空间先被规定，多样性已经发生</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">原文引用两类材料来支撑这套读法。它们分别说明“架构空间并不中立”和“LLM 结构变体确实极其丰富”，但作者没有把它们包装成对拉格朗日解释的形式证明。</p>
+          </div>
+          <div class="evidence-grid">
+            <div class="evidence">
+              <span class="figure-label">ARCHITECTURE GENERATOR · 2019</span>
+              <h3>随机布线网络：搜索之前，生成器已经限定世界</h3>
+              <p>《Exploring Randomly Wired Neural Networks for Image Recognition》把网络生成器定义为从参数空间到架构空间的映射。生成器决定计算图如何布线，因此架构搜索从来不是在“所有可能模型”中自由漫游。</p>
+              <p>文章把生成器读成 <span class="mono">g(θ)=0</span> 的一个具体化：它不是训练出的权重，而是学习开始前就规定允许动作与耦合的结构规则。</p>
+              <span class="claim-level">作用：机制类比，不是形式等价证明</span>
+            </div>
+            <div class="evidence">
+              <span class="figure-label">LLM LANDSCAPE · CURRENT PRACTICE</span>
+              <h3>架构画廊：变体不是偶发噪声，而是系统性景观</h3>
+              <p>Sebastian Raschka 的 LLM Architecture Gallery 与注意力综述把不同开放权重模型、主流注意力形式并置起来。原文还提到，文献中已有 <strong>70 多种</strong>注意力变体。</p>
+              <p>作者的解释是：当结构被视为约束实现时，大量变体正是预期现象——同一学习系统可以通过许多边界条件来组织计算。</p>
+              <span class="claim-level">作用：展示规模，不证明每种变体都有效</span>
+            </div>
+          </div>
+          <figure>
+            <img src="imgs/randomly-wired.jpg" alt="随机布线神经网络论文展示的多种计算图拓扑，形状和连接密度各不相同" loading="lazy">
+            <figcaption><strong>网络生成器先定义可搜索的结构集合。</strong>这张原文引用图的价值不在某一条连线，而在它直观显示：不同生成规则会产生完全不同的计算拓扑。</figcaption>
+          </figure>
+          <figure class="figure-wide">
+            <img src="imgs/llm-gallery.jpg" alt="Sebastian Raschka 的 LLM 架构画廊，按网格并列展示多种语言模型的模块结构" loading="lazy">
+            <figcaption><strong>同一任务族已经容纳大量结构实现。</strong>画廊是作者“架构多样性并非彼此无关发明”这一判断的现实背景；它提供景观，不提供因果验证。</figcaption>
+          </figure>
+        </section>
+
+        <section id="numerics">
+          <div class="section-head">
+            <span class="section-no">04 / NUMERICAL PRAGMATISM</span>
+            <h2>数值计算的本能：方法不神圣，收敛才重要</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">文章把神经网络放进数值计算传统中理解：它们天然更像可学习的求解器，而不是定理证明器。求解器的评价重点，是在约束下能否收敛、保持稳定并产生有用结果。</p>
+          </div>
+          <div class="numerical-rule">
+            <p class="pullquote">当计算被理解为“在边界条件下减少残差”，具体方法就不再神圣：注意力、路由、稀疏性与结构技巧，只要帮助系统抵达稳定且有效的计算，都可以被采用。</p>
+            <p>这是作者对“架构繁殖”的核心直觉：看似杂乱，其实是大规模数值实用主义。</p>
+          </div>
+          <div class="criteria" aria-label="数值计算的三个评价标准">
+            <div class="criterion"><strong>Converge</strong><span>是否把残差推向可接受区域</span></div>
+            <div class="criterion"><strong>Stable</strong><span>路径与状态是否保持可控</span></div>
+            <div class="criterion"><strong>Useful</strong><span>最终计算是否对任务有用</span></div>
+          </div>
+          <figure>
+            <img src="imgs/numerical-computation.jpg" alt="原文概念插图：披萨配料比喻数值方法的可组合性，旁边是多个学习固定点和跨越边界的神话人物" loading="lazy">
+            <figcaption><strong>原文用披萨与奥林匹斯诸神做比喻。</strong>配料可以换，只要最终能收敛；而当固定点不再由已知物理方程预先指定，系统便能沿许多不同力量和路径越过同一边界。</figcaption>
+          </figure>
+        </section>
+
+        <section id="tension">
+          <div class="section-head">
+            <span class="section-no">05 / THE CENTRAL TENSION</span>
+            <h2>真正释放多样性的，是“固定点没有被预先写死”</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">灵活性也带来文章最重要的张力。经典数值计算通常有已知控制方程和明确固定点；神经网络的固定点却是从数据中学出的、分布式的，而且会随训练变化。</p>
+          </div>
+          <div class="tension">
+            <div class="tension-side">
+              <h3>经典数值计算</h3>
+              <p>控制方程通常已知，目标状态由物理或数学问题预先规定。求解器是在相对清楚的边界里寻找那个解。</p>
+            </div>
+            <div class="tension-arrow" aria-hidden="true">⇄</div>
+            <div class="tension-side">
+              <h3>可学习神经计算</h3>
+              <p>固定点由数据几何与训练共同塑造，可以是分布式、动态的。系统不被锁在一条计算路径上，因此多种结构实现可以共存。</p>
+            </div>
+          </div>
+          <div class="comparison">
+            <table>
+              <thead><tr><th>观察维度</th><th>已知方程的求解器</th><th>神经网络</th></tr></thead>
+              <tbody>
+                <tr><td>控制规律</td><td>通常显式给定</td><td>部分由数据与训练隐式形成</td></tr>
+                <tr><td>固定点</td><td>相对明确、问题先验强</td><td>学习得到、分布式、可能动态</td></tr>
+                <tr><td>计算路径</td><td>围绕已知问题设计</td><td>可在架构约束内探索多条路径</td></tr>
+                <tr><td>架构多样性</td><td>方法受问题结构强约束</td><td>只要促进稳定有效计算，多种实现都可能成立</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="takeaway"><p>于是，架构丰富性不再只是“工程师发明了很多技巧”，而是“一个没有完全预设控制定律的可学习求解器，天然允许许多结构化求解路径”。</p></div>
+        </section>
+
+        <section id="boundary">
+          <div class="section-head">
+            <span class="section-no">06 / HOW FAR THE CLAIM GOES</span>
+            <h2>这套视角解释了什么，又没有证明什么</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">把概念框架和实证结论分开，才能正确使用这篇文章。它最有价值的地方是改变提问方式，而不是给出一种新的架构排行榜。</p>
+          </div>
+          <div class="boundary-list">
+            <div class="boundary-item"><strong>它解释了</strong><p>为什么架构可以进入学习问题的数学表述：结构规则决定可行域，而不是只在方程外提供工程便利。</p></div>
+            <div class="boundary-item"><strong>它统一了</strong><p>不同注意力、路由与参数化可以被放在同一坐标系里比较：它们分别允许什么耦合、路径和稳定状态。</p></div>
+            <div class="boundary-item"><strong>原文没有给出</strong><p>从 MHA、GQA、MLA 或稀疏注意力到具体 <span class="mono">g(θ)</span> 的严格构造，也没有证明这种映射唯一；下一节是本页依据原始论文补充的一种一致写法。</p></div>
+            <div class="boundary-item"><strong>它没有验证</strong><p>哪种约束更快、更省内存或性能更高。随机布线论文与架构画廊在原文中是支撑性例子，不是该主张的对照实验。</p></div>
+          </div>
+          <div class="takeaway"><p><strong>读完后最值得带走的问题：</strong>面对一种新架构，不只问“它用了什么模块”，还要问“它把哪些计算路径打开或关闭？它允许哪些变形？它让哪些稳定状态变得可达？”</p></div>
+        </section>
+
+        <section id="appendix">
+          <div class="section-head">
+            <span class="section-no">07 / MATHEMATICAL APPENDIX</span>
+            <h2>具体架构如何写成约束函数</h2>
+          </div>
+          <div class="read-column">
+            <p class="lead">最稳妥的严格化，不是先猜一个光滑标量函数，而是先说明“采用架构 A 时，哪些参数与计算图是可行的”。约束函数只是这个可行集的一种编码。</p>
+          </div>
+
+          <div class="appendix-shell">
+            <div class="extension-banner">
+              <strong>EDITORIAL EXTENSION</strong>
+              <p>以下公式不是 Deep Manifold 原文中的推导，而是本页根据各架构原始论文补充的数学化。它们提供一套可比较的严格写法，但不是唯一写法。</p>
+            </div>
+
+            <div class="math-foundation">
+              <h3>统一定义：先有可行集，再有约束函数</h3>
+              <p>令 <span class="mono">φ</span> 表示一个足够大的“超网络”描述：它既可以包含连续权重，也可以包含注意力掩码、头分组和层类型等离散变量。架构 A 定义可行集 <span class="mono">𝓕A</span>。对闭可行集，一种总是成立的精确编码是：</p>
+              <div class="math-display" data-latex="g_A(\phi)=\operatorname{dist}(\phi,\mathcal{F}_A)^2=0\quad\Longleftrightarrow\quad \phi\in\mathcal{F}_A">
+                <span class="math-fallback">g_A(φ) = dist(φ, 𝓕_A)² = 0 ⇔ φ ∈ 𝓕_A</span>
+              </div>
+              <p>因此，“架构是约束”严格地说是：训练只能在 <span class="mono">𝓕A</span> 内移动。下面的参数共享、低秩、固定支持集和整数选择，都是把不同 <span class="mono">𝓕A</span> 写出来的方法。</p>
+            </div>
+
+            <div class="pattern-table">
+              <table>
+                <thead><tr><th>约束类型</th><th>典型等式</th><th>它关闭了什么自由度</th></tr></thead>
+                <tbody>
+                  <tr><td>参数共享</td><td><span data-latex="W_i-W_j=0" data-display="false">Wᵢ − Wⱼ = 0</span></td><td>原本独立的头或模块必须使用同一参数。</td></tr>
+                  <tr><td>固定支持集</td><td><span data-latex="A\odot(1-S)=0" data-display="false">A ⊙ (1 − S) = 0</span></td><td>掩码之外的 token 交互被精确禁止。</td></tr>
+                  <tr><td>低秩因子化</td><td><span data-latex="\operatorname{rank}(B)\le r" data-display="false">rank(B) ≤ r</span></td><td>表示只能经过至多 r 维的共享潜在通道。</td></tr>
+                  <tr><td>离散结构选择</td><td><span data-latex="z_a\in\{0,1\},\ \sum_a z_a=1" data-display="false">zₐ ∈ {0,1}, Σzₐ = 1</span></td><td>每层只能选择规定集合中的一种算子。</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="math-case">
+              <div class="case-name"><span class="mono">CASE 01</span><strong>MHA</strong></div>
+              <div class="case-body">
+                <h3>约束对象：计算图必须分解成 H 个并行点积注意力头</h3>
+                <p>对输入 <span class="mono">X</span>，标准多头注意力要求每个头分别生成 Q、K、V，头输出拼接后再经过输出投影。若环境空间是任意 token mixer，那么“能否写成下面这种分解”本身就是架构约束。</p>
+                <div class="case-formula" data-latex="\begin{aligned}\operatorname{head}_h(X)&amp;=\operatorname{softmax}\!\left(\frac{(XW_h^Q)(XW_h^K)^\top}{\sqrt{d_k}}+M\right)(XW_h^V),\\Y&amp;=\operatorname{Concat}_{h=1}^{H}(\operatorname{head}_h(X))W^O.\end{aligned}">
+                  headₕ(X) = softmax((XWₕQ)(XWₕK)ᵀ/√dₖ + M)(XWₕV); Y = Concat(head₁…headH)WO
+                </div>
+                <p><strong>精确含义：</strong><span class="mono">𝓕MHA</span> 是所有可按上述 H 头分解实现的算子集合，因而可写成 <span data-latex="g_{\mathrm{MHA}}(\phi)=\operatorname{dist}(\phi,\mathcal{F}_{\mathrm{MHA}})^2" data-display="false">gMHA = dist²</span>。在已经直接以 MHA 参数化的模型里，这个约束是“按构造满足”的，不需要额外罚项。</p>
+                <a class="source-pill" href="https://arxiv.org/abs/1706.03762v7" target="_blank" rel="noopener noreferrer">Attention Is All You Need · §3.2.2 ↗</a>
+              </div>
+            </div>
+
+            <div class="math-case">
+              <div class="case-name"><span class="mono">CASE 02</span><strong>GQA</strong></div>
+              <div class="case-body">
+                <h3>约束对象：多个 query 头必须共享同一组 K、V 参数</h3>
+                <p>令 H 个 query 头被映射到 G 个 key-value 组，分组函数为 <span data-latex="\pi:\{1,\ldots,H\}\to\{1,\ldots,G\}" data-display="false">π:{1…H}→{1…G}</span>。在更大的 MHA 参数空间里，GQA 可由参数绑定精确写出：</p>
+                <div class="case-formula" data-latex="g_{\mathrm{GQA}}=\sum_{h=1}^{H}\left(\lVert W_h^K-\bar W_{\pi(h)}^K\rVert_F^2+\lVert W_h^V-\bar W_{\pi(h)}^V\rVert_F^2\right)=0">
+                  gGQA = Σₕ (‖WₕK − W̄π(h)K‖F² + ‖WₕV − W̄π(h)V‖F²) = 0
+                </div>
+                <p><strong>两个端点：</strong>当 <span data-latex="G=H,\ \pi(h)=h" data-display="false">G=H, π(h)=h</span> 时退化为 MHA；当 <span data-latex="G=1" data-display="false">G=1</span> 时是 Multi-Query Attention。严格约束的核心不是“组数”这个标签，而是 K、V 投影之间的等式共享关系。</p>
+                <a class="source-pill" href="https://arxiv.org/abs/2305.13245v3" target="_blank" rel="noopener noreferrer">GQA: Training Generalized Multi-Query Transformer Models ↗</a>
+              </div>
+            </div>
+
+            <div class="math-case">
+              <div class="case-name"><span class="mono">CASE 03</span><strong>MLA</strong></div>
+              <div class="case-body">
+                <h3>约束对象：K、V 的内容分支必须经过共享低维潜在表示</h3>
+                <p>抽取 DeepSeek-V2 MLA 的联合 KV 压缩核心，令潜在维度 <span class="mono">d_c</span> 小于原始表示维度：</p>
+                <div class="case-formula" data-latex="C=XW^{DKV},\qquad K^C=CW^{UK},\qquad V=CW^{UV}">
+                  C = XWDKV, Kᶜ = CWUK, V = CWUV
+                </div>
+                <p>这等价于要求内容键和值共享左因子 C，因此拼接矩阵的秩受到限制：</p>
+                <div class="case-formula" data-latex="\operatorname{rank}([K^C\;V])\le d_c,\qquad g_{\mathrm{MLA}}=\sum_{i&gt;d_c}\sigma_i([K^C\;V])^2=0">
+                  rank([Kᶜ V]) ≤ d꜀; gMLA = Σᵢ&gt;d꜀ σᵢ([Kᶜ V])² = 0
+                </div>
+                <p><strong>适用范围：</strong>这是 MLA 联合低秩压缩的精确核心，但不是完整 MLA。DeepSeek-V2 还把 RoPE 的位置相关 key 与内容分支解耦；完整可行集还应加入那部分计算图关系。</p>
+                <a class="source-pill" href="https://arxiv.org/abs/2405.04434v5" target="_blank" rel="noopener noreferrer">DeepSeek-V2 · Multi-Head Latent Attention ↗</a>
+              </div>
+            </div>
+
+            <div class="math-case">
+              <div class="case-name"><span class="mono">CASE 04</span><strong>Sparse</strong></div>
+              <div class="case-body">
+                <h3>约束对象：注意力矩阵只能在预先规定的支持集上非零</h3>
+                <p>令二值矩阵 <span data-latex="S\in\{0,1\}^{n\times n}" data-display="false">S∈{0,1}ⁿˣⁿ</span> 表示允许的 token 连接。把不允许的位置在 logits 中设为负无穷：</p>
+                <div class="case-formula" data-latex="A_\theta(X)=\operatorname{softmax}(L_\theta(X)+M_S),\qquad (M_S)_{ij}=\begin{cases}0,&amp;S_{ij}=1\\-\infty,&amp;S_{ij}=0\end{cases}">
+                  Aθ(X) = softmax(Lθ(X)+MS), with MS=0 on allowed edges and −∞ elsewhere
+                </div>
+                <p>其等价支持集约束是：</p>
+                <div class="case-formula" data-latex="g_{\mathrm{sparse}}(\theta;X)=\lVert A_\theta(X)\odot(1-S)\rVert_F^2=0\quad\text{for all }X">
+                  gsparse(θ;X) = ‖Aθ(X) ⊙ (1−S)‖F² = 0 for all X
+                </div>
+                <p><strong>精确含义：</strong>这不是让某些权重“倾向于变小”，而是把掩码外的交互从可行计算图中删除。固定步长、局部窗口、全局 token 等模式，对应不同的 S。</p>
+                <a class="source-pill" href="https://arxiv.org/abs/1904.10509v1" target="_blank" rel="noopener noreferrer">Generating Long Sequences with Sparse Transformers ↗</a>
+              </div>
+            </div>
+
+            <div class="math-case">
+              <div class="case-name"><span class="mono">CASE 05</span><strong>Hybrid</strong></div>
+              <div class="case-body">
+                <h3>约束对象：每层从有限算子集合中选择一种，并满足排列或比例规则</h3>
+                <p>令 <span class="mono">zℓ,a</span> 表示第 ℓ 层是否选择算子 a，例如 attention、SSM 或 MoE：</p>
+                <div class="case-formula" data-latex="h_{\ell+1}=\sum_a z_{\ell,a}F_a(h_\ell),\qquad z_{\ell,a}\in\{0,1\},\qquad \sum_a z_{\ell,a}=1">
+                  hℓ₊₁ = Σₐ zℓ,a Fₐ(hℓ), zℓ,a∈{0,1}, Σₐzℓ,a=1
+                </div>
+                <p>若把 z 暂时看作实数，二值与 one-hot 条件可编码为：</p>
+                <div class="case-formula" data-latex="g_{\mathrm{hybrid}}(z)=\sum_\ell\left(\sum_a z_{\ell,a}-1\right)^2+\sum_{\ell,a}z_{\ell,a}^2(1-z_{\ell,a})^2=0">
+                  ghybrid(z) = Σℓ(Σₐzℓ,a−1)² + Σℓ,a zℓ,a²(1−zℓ,a)² = 0
+                </div>
+                <p>固定 attention 层比例时，还可加入 <span data-latex="(\sum_\ell z_{\ell,\mathrm{attn}}-rL)^2=0" data-display="false">(Σℓzℓ,attn−rL)²=0</span>。Jamba 这类交错 Transformer–Mamba 架构，本质上定义的是一个带离散层类型和排列规则的混合整数可行集。</p>
+                <a class="source-pill" href="https://arxiv.org/abs/2403.19887v2" target="_blank" rel="noopener noreferrer">Jamba: A Hybrid Transformer-Mamba Language Model ↗</a>
+              </div>
+            </div>
+
+            <div class="precision-note"><strong>为什么实际训练常不直接优化这些 g？</strong> 离散集合、秩约束和带负无穷的掩码可能非光滑、非凸，甚至让普通梯度不可用。工程实现通常选择“按构造满足”——直接只存 GQA 的共享 KV、直接用低秩因子、直接施加 mask、直接固定层序列；需要搜索架构时，才使用连续松弛、罚函数、增广拉格朗日或混合整数方法。原博客中的 <span class="mono">g(θ)=0</span> 因而更适合读成可行集的总记号，而不是承诺一个处处光滑、唯一的约束函数。</div>
+          </div>
+        </section>
+
+        <footer>
+          <h2>来源与制作</h2>
+          <ul class="source-list">
+            <li><a href="https://x.com/BetaTomorrow/status/2037682795355762727" target="_blank" rel="noopener noreferrer">X 原帖</a>：Deep Manifold，发布于 2026-03-28，含 X Article 入口与中文标题。</li>
+            <li><a href="https://deepmanifold.substack.com/p/neural-fixed-points-lagrangian-and" target="_blank" rel="noopener noreferrer">作者 Substack 全文</a>：Mathematical Considerations for Neural Network Architecture，2026-03-27；本页正文与原图的主要数据源。</li>
+            <li><a href="https://arxiv.org/abs/1904.01569" target="_blank" rel="noopener noreferrer">Exploring Randomly Wired Neural Networks for Image Recognition</a>：原文引用的网络生成器例子。</li>
+            <li><a href="https://sebastianraschka.com/llm-architecture-gallery/" target="_blank" rel="noopener noreferrer">LLM Architecture Gallery</a>：原文引用的架构景观。</li>
+            <li><a href="https://arxiv.org/abs/1706.03762v7" target="_blank" rel="noopener noreferrer">Attention Is All You Need</a>：附注中的 MHA 计算图定义。</li>
+            <li><a href="https://arxiv.org/abs/2305.13245v3" target="_blank" rel="noopener noreferrer">GQA: Training Generalized Multi-Query Transformer Models</a>：附注中的 query 头与 KV 组共享关系。</li>
+            <li><a href="https://arxiv.org/abs/2405.04434v5" target="_blank" rel="noopener noreferrer">DeepSeek-V2</a>：附注中的 MLA 联合 KV 压缩与解耦 RoPE 边界。</li>
+            <li><a href="https://arxiv.org/abs/1904.10509v1" target="_blank" rel="noopener noreferrer">Generating Long Sequences with Sparse Transformers</a>：附注中的稀疏支持集约束。</li>
+            <li><a href="https://arxiv.org/abs/2403.19887v2" target="_blank" rel="noopener noreferrer">Jamba</a>：附注中的混合层类型与交错架构例子。</li>
+          </ul>
+          <div class="tags" aria-label="主题标签">
+            <span class="tag">Neural Networks</span><span class="tag">Architecture</span><span class="tag">Attention</span><span class="tag">Numerical Methods</span>
+          </div>
+          <p class="production-meta" data-llm-model="GPT-5.6 Sol" data-llm-effort="xhigh">
+            <span class="production-label">制作信息</span>
+            <span class="production-chip"><span class="production-key">LLM</span><span class="production-value">GPT-5.6 Sol</span></span>
+            <span class="production-chip"><span class="production-key">effort</span><span class="production-value">xhigh</span></span>
+          </p>
+          <p class="footer-note">博客主线依据作者公开 Substack 全文与其中 4 张原图整理；数学附注另依据 MHA、GQA、DeepSeek-V2、Sparse Transformer 与 Jamba 的原始论文，并明确标为编辑延伸。X Articles 登录页未作为补充事实来源。未执行独立模型 review。</p>
+        </footer>
+      </article>
+    </main>
+
+    <aside class="toc" aria-label="文章目录">
+      <strong>READING PATH</strong>
+      <a href="#equation">01 方程内部</a>
+      <a href="#constraint">02 可行域</a>
+      <a href="#evidence">03 两个例子</a>
+      <a href="#numerics">04 数值实用主义</a>
+      <a href="#tension">05 固定点张力</a>
+      <a href="#boundary">06 阅读边界</a>
+      <a href="#appendix">07 数学附注</a>
+    </aside>
+  </div>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script>
+    const modes = {
+      mha: {
+        code: "MODE / MHA", title: `多头各自保留 Q、K、V 投影`,
+        constraint: "<strong>约束变化：</strong>头之间的表示与缓存结构保持较高独立性。",
+        effect: "<strong>作者视角：</strong>这规定了一类耦合方式与可达路径；它不是‘无约束基线’，而是一个具体的约束实现。",
+        shape: ["15%", "13%", "69%", "70%", "42% 58% 57% 43% / 56% 39% 61% 44%"], route: ["21%", "60%", "57%", "-19deg"]
+      },
+      gqa: {
+        code: "MODE / GQA", title: `多个查询头共享较少的 K、V 组`,
+        constraint: "<strong>约束变化：</strong>共享规则压缩了键值表示与缓存的自由度。",
+        effect: "<strong>作者视角：</strong>部分耦合被强制共享，可行域收紧，但换来不同的内存与计算路径。",
+        shape: ["22%", "14%", "56%", "69%", "32% 68% 44% 56% / 61% 33% 67% 39%"], route: ["27%", "62%", "46%", "-31deg"]
+      },
+      mla: {
+        code: "MODE / MLA", title: `先压到潜在空间，再组织注意力`,
+        constraint: "<strong>约束变化：</strong>信息必须经过低维或潜在表示通道。",
+        effect: "<strong>作者视角：</strong>可行域被重新参数化；某些表示路径被压缩，另一些稳定路径被突出。",
+        shape: ["18%", "22%", "63%", "52%", "57% 43% 35% 65% / 35% 60% 40% 65%"], route: ["24%", "56%", "53%", "-4deg"]
+      },
+      sparse: {
+        code: "MODE / SPARSE", title: `只允许部分 token 或位置发生耦合`,
+        constraint: "<strong>约束变化：</strong>连接模式显式稀疏，大量潜在交互被关闭。",
+        effect: "<strong>作者视角：</strong>系统不再遍历稠密路径，而是在被选中的子图中寻找稳定计算。",
+        shape: ["28%", "10%", "43%", "74%", "18% 82% 23% 77% / 74% 20% 80% 26%"], route: ["33%", "68%", "35%", "-48deg"]
+      },
+      hybrid: {
+        code: "MODE / HYBRID", title: `多种局部规则共同划定边界`,
+        constraint: "<strong>约束变化：</strong>稠密、稀疏、卷积或状态空间路径按层或模块组合。",
+        effect: "<strong>作者视角：</strong>可行域成为分片、堆叠且移动的结构，不同区域保留不同内在路径。",
+        shape: ["12%", "17%", "76%", "63%", "65% 35% 62% 38% / 31% 67% 33% 69%"], route: ["18%", "53%", "66%", "13deg"]
+      }
+    };
+
+    const buttons = document.querySelectorAll('.lab-controls button');
+    const feasible = document.querySelector('.feasible');
+    const route = document.querySelector('.route');
+    buttons.forEach((button) => button.addEventListener('click', () => {
+      buttons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      const mode = modes[button.dataset.mode];
+      document.querySelector('#lab-code').textContent = mode.code;
+      document.querySelector('#lab-title').textContent = mode.title;
+      document.querySelector('#lab-constraint').innerHTML = mode.constraint;
+      document.querySelector('#lab-effect').innerHTML = mode.effect;
+      [feasible.style.left, feasible.style.top, feasible.style.width, feasible.style.height, feasible.style.borderRadius] = mode.shape;
+      [route.style.left, route.style.top, route.style.width, route.style.transform] = [mode.route[0], mode.route[1], mode.route[2], `rotate(${mode.route[3]})`];
+    }));
+
+    window.addEventListener('load', () => {
+      const formulas = document.querySelectorAll('[data-latex]');
+      if (window.katex) formulas.forEach((formula) => {
+        try {
+          katex.render(formula.dataset.latex, formula, {
+            throwOnError: false,
+            displayMode: formula.dataset.display !== 'false'
+          });
+        } catch (_) {}
+      });
+    });
+
+    const progress = document.querySelector('.progress');
+    const updateProgress = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      progress.style.width = `${max > 0 ? (window.scrollY / max) * 100 : 0}%`;
+    };
+    document.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const tocLinks = [...document.querySelectorAll('.toc a')];
+    const sections = tocLinks.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          tocLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${entry.target.id}`));
+        });
+      }, { rootMargin: '-18% 0px -68% 0px', threshold: 0 });
+      sections.forEach((section) => observer.observe(section));
+    }
+  </script>
+</body>
+</html>
