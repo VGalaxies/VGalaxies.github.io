@@ -8,6 +8,17 @@
 #   tags         - 3–5 个稳定主题标签
 #   source_url   - 原文链接（可选）
 entries:
+  - slug: lisp-agent-100-lines
+    title: '100 行 Lisp Agent：当技能变成记忆'
+    date: 2026-07-13
+    source_type: blog
+    tags:
+      - 'Agent Systems'
+      - 'Lisp'
+      - 'Agent Memory'
+      - 'Tool Use'
+      - 'Developer Tools'
+    source_url: 'https://thebeach.dev/posts/lisp-agent/'
   - slug: the-future-worth-building-is-human
     title: 'Thinking Machines 为什么押注分布式、被人塑造的 AI'
     date: 2026-07-13
